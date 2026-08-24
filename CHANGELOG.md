@@ -4,6 +4,17 @@ All notable changes to codex-trace are documented here. Versions follow
 [semantic versioning](https://semver.org/), and this file follows
 [Keep a Changelog](https://keepachangelog.com/) conventions.
 
+## [0.4.13] — 2026-08-24
+
+### Added
+
+- **Scoped turn navigation and search**. Navigate replies from the turn list or detail view and
+  search within the active session or turn.
+- **Session status reconciliation**. Recheck the selected session through a lightweight endpoint
+  so a missed SSE event cannot leave the detail view permanently marked Active.
+
+[0.4.13]: https://github.com/starofkuku/codex-trace/releases/tag/v0.4.13
+
 ## [0.4.12] — 2026-08-20
 
 ### Added

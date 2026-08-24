@@ -107,6 +107,7 @@ async fn run_server(state: Arc<HttpState>) {
         .route("/api/frontend/update", post(api_update_frontend))
         .route("/api/sessions", post(api_discover_sessions))
         .route("/api/session/load", post(api_load_session))
+        .route("/api/session/status", post(api_session_status))
         .route("/api/session/watch", post(api_watch_session))
         .route("/api/session/unwatch", post(api_unwatch_session))
         .route("/api/picker/watch", post(api_watch_picker))
@@ -451,6 +452,22 @@ async fn api_load_session(
         }
     };
     ok_json(&session)
+}
+
+async fn api_session_status(
+    State(state): State<Arc<HttpState>>,
+    Json(body): Json<PathBody>,
+) -> Response {
+    let app_state = state.app_state.clone();
+    let result = tokio::task::spawn_blocking(move || app_state.session_status(&body.path)).await;
+    let status = match result {
+        Ok(Ok(status)) => status,
+        Ok(Err(e)) => return err_response(session_load_error_status(&e), e),
+        Err(e) => {
+            return err_response(axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+        }
+    };
+    ok_json(&status)
 }
 
 // ---------------------------------------------------------------------------

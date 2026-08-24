@@ -296,6 +296,12 @@ export interface CodexSession {
   pagination?: SessionPagination | null;
 }
 
+export interface SessionStatus {
+  path: string;
+  is_ongoing: boolean;
+  source_size_bytes: number;
+}
+
 export interface SessionPatch {
   path: string;
   updated_turns: CodexTurn[];

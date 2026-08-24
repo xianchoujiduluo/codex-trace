@@ -1,7 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "../lib/invoke";
-import type { CodexSession, SessionPageDirection, SessionUpdatePayload } from "../../shared/types";
+import type {
+  CodexSession,
+  SessionPageDirection,
+  SessionStatus,
+  SessionUpdatePayload,
+} from "../../shared/types";
 import { useTauriEvent } from "./useTauriEvent";
+
+const SESSION_STATUS_POLL_INTERVAL_MS = 5_000;
 
 interface SessionState {
   session: CodexSession | null;
@@ -143,6 +150,53 @@ export function useSession() {
       };
     });
   });
+
+  useEffect(() => {
+    if (!state.sessionPath) return;
+
+    let cancelled = false;
+    const reconcileStatus = async () => {
+      try {
+        const status = await invoke<SessionStatus>("get_session_status", {
+          path: state.sessionPath,
+        });
+        if (cancelled) return;
+        setState((prev) => {
+          if (!prev.session || prev.sessionPath !== status.path) return prev;
+          const pagination = prev.session.pagination
+            ? {
+                ...prev.session.pagination,
+                source_size_bytes: status.source_size_bytes,
+              }
+            : prev.session.pagination;
+          if (
+            prev.session.is_ongoing === status.is_ongoing &&
+            prev.session.pagination?.source_size_bytes === status.source_size_bytes
+          ) {
+            return prev;
+          }
+          return {
+            ...prev,
+            session: {
+              ...prev.session,
+              is_ongoing: status.is_ongoing,
+              pagination,
+            },
+          };
+        });
+      } catch {
+        // The SSE stream and session watcher remain the primary live-update paths. A failed
+        // reconciliation is retried on the next interval without interrupting the current view.
+      }
+    };
+
+    void reconcileStatus();
+    const interval = window.setInterval(reconcileStatus, SESSION_STATUS_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [state.sessionPath]);
 
   useEffect(() => {
     return () => {

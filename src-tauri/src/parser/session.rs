@@ -6,6 +6,7 @@ use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use super::activity::ACTIVITY_STALE_AFTER;
 use super::compression::{read_session_file, resolve_rollout_path};
 use super::entry::{extract_session_id, RawEntry};
 use super::toolcall::ToolKind;
@@ -52,6 +53,13 @@ pub struct CodexSession {
     /// Present when this response contains only one page of turns from a large session.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pagination: Option<SessionPagination>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SessionStatus {
+    pub path: String,
+    pub is_ongoing: bool,
+    pub source_size_bytes: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -331,6 +339,26 @@ impl IncrementalSession {
 
     pub fn source_size_bytes(&self) -> u64 {
         self.source_size_bytes
+    }
+
+    /// Return the current activity state without requiring a full session response. This also
+    /// applies the inactivity rule when no filesystem event was delivered after the last write.
+    pub fn status_snapshot(&self) -> SessionStatus {
+        let file_fresh = self
+            .modified
+            .map(|modified| {
+                SystemTime::now()
+                    .duration_since(modified)
+                    .map(|age| age <= ACTIVITY_STALE_AFTER)
+                    .unwrap_or(true)
+            })
+            .unwrap_or(true);
+
+        SessionStatus {
+            path: self.session.path.clone(),
+            is_ongoing: self.session.is_ongoing && !self.has_session_end && file_fresh,
+            source_size_bytes: self.source_size_bytes,
+        }
     }
 
     pub fn refresh(&mut self) -> Result<SessionRefresh, String> {
@@ -2568,5 +2596,29 @@ mod tests {
             SessionRefresh::Full { .. } => "full",
             SessionRefresh::Patch(_) => "patch",
         }
+    }
+
+    #[test]
+    fn status_snapshot_expires_an_ongoing_session_without_new_file_events() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("rollout-status.jsonl");
+        std::fs::write(
+            &path,
+            concat!(
+                r#"{"timestamp":"2026-08-18T12:00:00Z","type":"session_meta","payload":{"id":"status"}}"#,
+                "\n",
+                r#"{"timestamp":"2026-08-18T12:00:01Z","type":"event_msg","payload":{"type":"task_started"}}"#,
+                "\n",
+            ),
+        )
+        .unwrap();
+
+        let mut session = IncrementalSession::load(&path).unwrap();
+        assert!(session.status_snapshot().is_ongoing);
+        session.modified = Some(
+            SystemTime::now() - super::ACTIVITY_STALE_AFTER - std::time::Duration::from_secs(1),
+        );
+
+        assert!(!session.status_snapshot().is_ongoing);
     }
 }

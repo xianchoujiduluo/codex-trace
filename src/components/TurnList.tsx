@@ -17,6 +17,7 @@ import {
 } from "./Icons";
 import { tokenBreakdownTitle } from "./TokenBar";
 import { SubagentMarker } from "./SubagentMarker";
+import { matchesTurn } from "../lib/turnSearch";
 
 interface TurnListProps {
   turns: CodexTurn[];
@@ -25,6 +26,7 @@ interface TurnListProps {
   pagination?: SessionPagination | null;
   loadingMore?: boolean;
   onLoadMore?: () => void;
+  searchQuery?: string;
 }
 
 function statusIcon(status: CodexTurn["status"]): string {
@@ -41,39 +43,20 @@ export function TurnList({
   pagination,
   loadingMore = false,
   onLoadMore,
+  searchQuery = "",
 }: TurnListProps) {
-  const listRef = useAutoScroll<HTMLDivElement>(turns.length);
+  const visibleTurns = useMemo(
+    () =>
+      turns
+        .map((turn, index) => ({ turn, index }))
+        .filter(({ turn }) => matchesTurn(turn, searchQuery)),
+    [searchQuery, turns],
+  );
+  const listRef = useAutoScroll<HTMLDivElement>(visibleTurns.length);
   const selectedRef = useScrollToSelected(selectedIndex);
   const [collapsedUsers, setCollapsedUsers] = useState<Set<number>>(new Set());
   const [expandedCodex, setExpandedCodex] = useState<Set<number>>(new Set());
   const clickTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
-  const [replyNavTurnId, setReplyNavTurnId] = useState<string | null>(null);
-
-  const replyTurns = useMemo(
-    () =>
-      turns
-        .map((turn, index) => ({ turn, index }))
-        .filter(
-          ({ turn }) => turn.error || turn.agent_messages.some((message) => !message.is_reasoning),
-        ),
-    [turns],
-  );
-  const replyNavPos = replyTurns.findIndex(({ turn }) => turn.turn_id === replyNavTurnId);
-
-  const scrollToReplyTurn = useCallback(
-    (dir: 1 | -1) => {
-      const last = replyTurns.length - 1;
-      if (last < 0) return;
-      const current = replyTurns.findIndex(({ turn }) => turn.turn_id === replyNavTurnId);
-      const next = Math.min(current, last) + dir;
-      if (next < 0 || next > last) return;
-      const target = replyTurns[next];
-      const el = listRef.current?.querySelector<HTMLElement>(`[data-turn-index="${target.index}"]`);
-      el?.scrollIntoView({ behavior: "smooth", block: "start" });
-      setReplyNavTurnId(target.turn.turn_id);
-    },
-    [replyNavTurnId, replyTurns, listRef],
-  );
 
   const toggleUser = useCallback((i: number) => {
     setCollapsedUsers((prev) => {
@@ -114,31 +97,6 @@ export function TurnList({
 
   return (
     <div ref={listRef} className="message-list">
-      <div className="turn-nav" role="navigation" aria-label="Codex reply navigation">
-        <button
-          type="button"
-          className="view-toolbar__btn"
-          onClick={() => scrollToReplyTurn(-1)}
-          disabled={replyNavPos <= 0}
-          aria-label="Previous Codex reply"
-          title="Previous Codex reply"
-        >
-          <BackIcon /> Prev Codex
-        </button>
-        <span className="turn-nav__position">
-          {replyNavPos >= 0 ? `${replyNavPos + 1}` : "–"}/{replyTurns.length}
-        </span>
-        <button
-          type="button"
-          className="view-toolbar__btn"
-          onClick={() => scrollToReplyTurn(1)}
-          disabled={replyNavPos >= replyTurns.length - 1}
-          aria-label="Next Codex reply"
-          title="Next Codex reply"
-        >
-          Next Codex <ForwardIcon />
-        </button>
-      </div>
       {pagination?.has_more && pagination.direction === "backward" && onLoadMore && (
         <button
           type="button"
@@ -149,7 +107,7 @@ export function TurnList({
           <BackIcon /> {loadingMore ? "Loading older turns…" : "Load older turns"}
         </button>
       )}
-      {turns.map((turn, i) => {
+      {visibleTurns.map(({ turn, index: i }) => {
         const isSelected = i === selectedIndex;
         const userMsg = turn.user_message ?? "";
         const userCollapsed = collapsedUsers.has(i);
@@ -302,7 +260,11 @@ export function TurnList({
           </div>
         );
       })}
-      {turns.length === 0 && <div className="message-list__empty">No turns in this session.</div>}
+      {visibleTurns.length === 0 && (
+        <div className="message-list__empty">
+          {searchQuery.trim() ? "No matching turns in this session." : "No turns in this session."}
+        </div>
+      )}
       {pagination?.has_more && pagination.direction === "forward" && onLoadMore && (
         <button
           type="button"

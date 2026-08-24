@@ -9,6 +9,7 @@ import { shortModel, formatExactTime } from "../lib/format";
 import { getContextColor, getModelColor } from "../lib/theme";
 import { contextRemainingPercent, formatTokens, formatDuration } from "../../shared/format";
 import { TokenBar } from "./TokenBar";
+import { matchesText, toolSearchText } from "../lib/turnSearch";
 
 interface TurnDetailProps {
   turn: CodexTurn;
@@ -17,6 +18,7 @@ interface TurnDetailProps {
   onBack: () => void;
   openWorkerCallId?: string | null;
   onOpenWorkerPanel?: (tool: CodexToolCall) => void;
+  searchQuery?: string;
 }
 
 export function TurnDetail({
@@ -26,6 +28,7 @@ export function TurnDetail({
   onBack,
   openWorkerCallId,
   onOpenWorkerPanel,
+  searchQuery = "",
 }: TurnDetailProps) {
   const commentary = turn.agent_messages.filter(
     (m) => m.phase !== "final_answer" && !m.is_reasoning,
@@ -92,6 +95,31 @@ export function TurnDetail({
     );
   });
   timeline.sort((a, b) => a.order - b.order);
+  const searchActive = searchQuery.trim().length > 0;
+  const visibleTimeline = searchActive
+    ? timeline.filter((item) =>
+        item.kind === "msg"
+          ? matchesText(item.msg.text, searchQuery)
+          : matchesText(toolSearchText(item.tool), searchQuery),
+      )
+    : timeline;
+  const visibleWarnings = searchActive
+    ? (turn.warnings ?? []).filter((warning) => matchesText(warning, searchQuery))
+    : (turn.warnings ?? []);
+  const showError = Boolean(turn.error && (!searchActive || matchesText(turn.error, searchQuery)));
+  const visibleFinalAnswer =
+    finalAnswer && (!searchActive || matchesText(finalAnswer.text, searchQuery))
+      ? finalAnswer
+      : null;
+  const showUserMessage = Boolean(
+    searchActive && turn.user_message && matchesText(turn.user_message, searchQuery),
+  );
+  const hasSearchMatches =
+    showUserMessage ||
+    showError ||
+    visibleWarnings.length > 0 ||
+    visibleTimeline.length > 0 ||
+    visibleFinalAnswer !== null;
   const model = turn.model ? shortModel(turn.model) : "";
   const modelColor = turn.model ? getModelColor(turn.model) : undefined;
 
@@ -155,17 +183,24 @@ export function TurnDetail({
             </div>
           )}
 
-          {turn.error && (
+          {showUserMessage && (
+            <div className="turn-detail__section turn-detail__section--search-match">
+              <div className="turn-detail__section-label">User message</div>
+              <pre className="turn-detail__search-text">{turn.user_message}</pre>
+            </div>
+          )}
+
+          {showError && (
             <div className="turn-detail__section turn-detail__section--error">
               <div className="turn-detail__section-label">Error</div>
               <pre className="turn-detail__error">{turn.error}</pre>
             </div>
           )}
 
-          {turn.warnings && turn.warnings.length > 0 && (
+          {visibleWarnings.length > 0 && (
             <div className="turn-detail__section turn-detail__section--warning">
               <div className="turn-detail__section-label">Warnings</div>
-              {turn.warnings.map((warning) => (
+              {visibleWarnings.map((warning) => (
                 <pre key={warning} className="turn-detail__warning">
                   {warning}
                 </pre>
@@ -173,7 +208,7 @@ export function TurnDetail({
             </div>
           )}
 
-          {reasoning.length > 0 && (
+          {!searchActive && reasoning.length > 0 && (
             <div className="turn-detail__section turn-detail__section--reasoning">
               <div
                 className="turn-detail__section-label"
@@ -187,9 +222,9 @@ export function TurnDetail({
             </div>
           )}
 
-          {timeline.length > 0 && (
+          {visibleTimeline.length > 0 && (
             <div className="turn-detail__section turn-detail__section--activity">
-              {timeline.map((item, i) =>
+              {visibleTimeline.map((item, i) =>
                 item.kind === "msg" ? (
                   <ComplementaryItem key={`m-${item.msg.timestamp || i}`} msg={item.msg} />
                 ) : item.kind === "raw_exec" ? (
@@ -208,23 +243,27 @@ export function TurnDetail({
             </div>
           )}
 
-          {finalAnswer && (
+          {visibleFinalAnswer && (
             <div className="turn-detail__section turn-detail__section--final">
               <div className="turn-detail__section-label">Final answer</div>
               <div className="turn-detail__msg">
                 <div className="turn-detail__msg-header">
-                  <CopyMessageButton text={finalAnswer.text} label="Final answer content" />
-                  {finalAnswer.timestamp && (
+                  <CopyMessageButton text={visibleFinalAnswer.text} label="Final answer content" />
+                  {visibleFinalAnswer.timestamp && (
                     <span className="turn-detail__msg-time">
-                      {formatExactTime(finalAnswer.timestamp)}
+                      {formatExactTime(visibleFinalAnswer.timestamp)}
                     </span>
                   )}
                 </div>
                 <div className="turn-detail__markdown">
-                  <MarkdownRenderer content={finalAnswer.text} />
+                  <MarkdownRenderer content={visibleFinalAnswer.text} />
                 </div>
               </div>
             </div>
+          )}
+
+          {searchActive && !hasSearchMatches && (
+            <div className="turn-detail__search-empty">No matches in this turn.</div>
           )}
 
           {turn.has_compaction && (

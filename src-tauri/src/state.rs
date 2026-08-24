@@ -7,6 +7,7 @@ use crate::parser::activity::{collect_session_paths, ActivityTracker};
 use crate::parser::discover::CodexSessionInfo;
 use crate::parser::session::{
     page_session, CodexSession, IncrementalSession, SessionPageDirection, SessionRefresh,
+    SessionStatus,
 };
 use crate::settings::Settings;
 use crate::watcher::WatcherHandle;
@@ -148,6 +149,15 @@ impl AppState {
         let mut session = entry.lock().map_err(|e| e.to_string())?;
         let _ = session.refresh()?;
         Ok(session.session().clone())
+    }
+
+    /// Refresh the cached parser and return only the activity fields needed to reconcile a
+    /// live UI after an SSE reconnect or a missed filesystem notification.
+    pub fn session_status(&self, path: &str) -> Result<SessionStatus, String> {
+        let entry = self.parsed_session(path)?;
+        let mut session = entry.lock().map_err(|e| e.to_string())?;
+        let _ = session.refresh()?;
+        Ok(session.status_snapshot())
     }
 
     /// Refresh a cached parser and return only the changed data for the live watcher.
@@ -578,6 +588,40 @@ mod tests {
                 .map(|session| session.last_activity_time.as_str()),
             Some("2026-08-18T12:00:02Z")
         );
+    }
+
+    #[test]
+    fn session_status_refreshes_a_missed_terminal_event() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("rollout-status.jsonl");
+        std::fs::write(
+            &path,
+            concat!(
+                r#"{"timestamp":"2026-08-18T12:00:00Z","type":"session_meta","payload":{"id":"status"}}"#,
+                "\n",
+                r#"{"timestamp":"2026-08-18T12:00:01Z","type":"event_msg","payload":{"type":"task_started"}}"#,
+                "\n",
+            ),
+        )
+        .unwrap();
+
+        let state = make_state();
+        let active = state.session_status(path.to_str().unwrap()).unwrap();
+        assert!(active.is_ongoing);
+
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap();
+        writeln!(
+            file,
+            r#"{{"timestamp":"2026-08-18T12:00:02Z","type":"event_msg","payload":{{"type":"task_complete"}}}}"#
+        )
+        .unwrap();
+
+        let completed = state.session_status(path.to_str().unwrap()).unwrap();
+        assert!(!completed.is_ongoing);
+        assert!(completed.source_size_bytes > active.source_size_bytes);
     }
 
     #[test]

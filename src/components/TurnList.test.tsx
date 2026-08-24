@@ -275,132 +275,34 @@ describe("TurnList", () => {
     expect(screen.getByText("1 think")).toBeInTheDocument();
   });
 
-  it("navigates between Codex reply turns with the nav buttons", () => {
-    const scrollSpy = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(() => {});
-    const turns = [
-      makeTurn({ turn_id: "t0", agent_messages: [FINAL_MSG] }),
-      makeTurn({ turn_id: "t1", agent_messages: [] }),
-      makeTurn({ turn_id: "t2", agent_messages: [FINAL_MSG] }),
-    ];
-    render(<TurnList turns={turns} selectedIndex={-1} onSelectTurn={vi.fn()} />);
-
-    const prevBtn = screen.getByRole("button", { name: "Previous Codex reply" });
-    const nextBtn = screen.getByRole("button", { name: "Next Codex reply" });
-    expect(prevBtn).toBeDisabled();
-    expect(screen.getByText("–/2")).toBeInTheDocument();
-
-    fireEvent.click(nextBtn);
-    expect(scrollSpy.mock.contexts[0]).toBe(document.querySelector('[data-turn-index="0"]'));
-    expect(screen.getByText("1/2")).toBeInTheDocument();
-
-    fireEvent.click(nextBtn);
-    expect(scrollSpy.mock.contexts[1]).toBe(document.querySelector('[data-turn-index="2"]'));
-    expect(screen.getByText("2/2")).toBeInTheDocument();
-    expect(nextBtn).toBeDisabled();
-
-    fireEvent.click(prevBtn);
-    expect(scrollSpy.mock.contexts[2]).toBe(document.querySelector('[data-turn-index="0"]'));
-    expect(screen.getByText("1/2")).toBeInTheDocument();
-    scrollSpy.mockRestore();
-  });
-
-  it("keeps the nav position valid when newer turns arrive", () => {
-    const scrollSpy = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(() => {});
-    const turns = [makeTurn({ turn_id: "t0", agent_messages: [FINAL_MSG] })];
-    const { rerender } = render(
-      <TurnList turns={turns} selectedIndex={-1} onSelectTurn={vi.fn()} />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Next Codex reply" }));
-    expect(screen.getByText("1/1")).toBeInTheDocument();
-
-    rerender(
-      <TurnList
-        turns={[
-          ...turns,
-          makeTurn({ turn_id: "t1", agent_messages: [] }),
-          makeTurn({ turn_id: "t2", agent_messages: [FINAL_MSG] }),
-        ]}
-        selectedIndex={-1}
-        onSelectTurn={vi.fn()}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Next Codex reply" }));
-    expect(scrollSpy.mock.contexts[1]).toBe(document.querySelector('[data-turn-index="2"]'));
-    scrollSpy.mockRestore();
-  });
-
-  it("keeps the current reply when older turns are prepended", () => {
-    const scrollSpy = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(() => {});
-    const originalTurns = [
-      makeTurn({ turn_id: "t0", agent_messages: [FINAL_MSG] }),
-      makeTurn({ turn_id: "t1", agent_messages: [] }),
-      makeTurn({ turn_id: "t2", agent_messages: [FINAL_MSG] }),
-    ];
-    const { rerender } = render(
-      <TurnList turns={originalTurns} selectedIndex={-1} onSelectTurn={vi.fn()} />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Next Codex reply" }));
-    fireEvent.click(screen.getByRole("button", { name: "Next Codex reply" }));
-    expect(screen.getByText("2/2")).toBeInTheDocument();
-
-    rerender(
-      <TurnList
-        turns={[makeTurn({ turn_id: "older", agent_messages: [FINAL_MSG] }), ...originalTurns]}
-        selectedIndex={-1}
-        onSelectTurn={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText("3/3")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Next Codex reply" })).toBeDisabled();
-
-    fireEvent.click(screen.getByRole("button", { name: "Previous Codex reply" }));
-    expect(scrollSpy.mock.contexts.at(-1)).toBe(document.querySelector('[data-turn-index="1"]'));
-    scrollSpy.mockRestore();
-  });
-
-  it("counts visible replies and errors but skips reasoning-only turns", () => {
-    const reasoningOnly: AgentMessage = {
-      text: "encrypted reasoning",
-      phase: null,
-      timestamp: "2026-04-26T10:00:30Z",
-      is_reasoning: true,
-    };
+  it("filters turns within the current session", () => {
     render(
       <TurnList
         turns={[
-          makeTurn({ turn_id: "reasoning", agent_messages: [reasoningOnly] }),
-          makeTurn({
-            turn_id: "error",
-            agent_messages: [],
-            error: "Request failed",
-            final_answer: null,
-          }),
-          makeTurn({ turn_id: "reply", agent_messages: [FINAL_MSG] }),
+          makeTurn({ turn_id: "match", user_message: "Find this request" }),
+          makeTurn({ turn_id: "other", user_message: "Different request" }),
         ]}
         selectedIndex={-1}
         onSelectTurn={vi.fn()}
+        searchQuery="find this"
       />,
     );
 
-    expect(screen.getByText("–/2")).toBeInTheDocument();
+    expect(screen.getByText("Find this request")).toBeInTheDocument();
+    expect(screen.queryByText("Different request")).not.toBeInTheDocument();
   });
 
-  it("hides no-reply state correctly when only user-only turns exist", () => {
+  it("shows no matching state when a session turn search has no result", () => {
     render(
       <TurnList
-        turns={[makeTurn({ turn_id: "t0", agent_messages: [] })]}
+        turns={[makeTurn({ turn_id: "t0", user_message: "Hello" })]}
         selectedIndex={-1}
         onSelectTurn={vi.fn()}
+        searchQuery="missing"
       />,
     );
 
-    expect(screen.getByText("–/0")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Previous Codex reply" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Next Codex reply" })).toBeDisabled();
+    expect(screen.getByText("No matching turns in this session.")).toBeInTheDocument();
   });
 
   it("offers to load older turns for a backward paged session", () => {

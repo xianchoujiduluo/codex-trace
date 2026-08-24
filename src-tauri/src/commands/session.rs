@@ -39,6 +39,17 @@ pub async fn load_session(
 }
 
 #[tauri::command]
+pub async fn get_session_status(
+    path: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<crate::parser::session::SessionStatus, String> {
+    let app_state = state.inner().clone();
+    tokio::task::spawn_blocking(move || app_state.session_status(&path))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
 pub async fn watch_session(
     path: String,
     app: AppHandle,

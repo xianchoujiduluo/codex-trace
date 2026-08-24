@@ -23,12 +23,16 @@ const listKeys: KeyHint[] = [
   { key: "Enter", label: "detail" },
   { key: "e/c", label: "expand/collapse" },
   { key: "q", label: "sessions" },
+  { key: "n/p", label: "replies" },
+  { key: "/", label: "search" },
 ];
 
 const detailKeys: KeyHint[] = [
   { key: "j/k", label: "items" },
   { key: "Tab", label: "toggle" },
   { key: "q/Esc", label: "back" },
+  { key: "n/p", label: "replies" },
+  { key: "/", label: "search" },
 ];
 
 function getKeys(view: ViewState): KeyHint[] {

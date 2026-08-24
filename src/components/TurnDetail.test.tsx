@@ -321,4 +321,44 @@ describe("TurnDetail", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(text));
     expect(screen.getByRole("button", { name: "Copied Final answer content" })).toBeVisible();
   });
+
+  it("filters detail content within the current turn", () => {
+    const matchingMessage: AgentMessage = {
+      text: "Unique detail needle",
+      phase: "commentary",
+      timestamp: "2026-04-26T10:00:00Z",
+      is_reasoning: false,
+      order: 0,
+    };
+    render(
+      <TurnDetail
+        turn={makeTurn({
+          agent_messages: [matchingMessage, FINAL_MSG],
+          final_answer: FINAL_MSG.text,
+        })}
+        expanded={new Set()}
+        onToggle={vi.fn()}
+        onBack={vi.fn()}
+        searchQuery="detail needle"
+      />,
+    );
+
+    expect(screen.getByText("Unique detail needle")).toBeInTheDocument();
+    expect(screen.queryByText("Done")).not.toBeInTheDocument();
+  });
+
+  it("shows an empty result when the current turn has no search match", () => {
+    render(
+      <TurnDetail
+        turn={makeTurn()}
+        expanded={new Set()}
+        onToggle={vi.fn()}
+        onBack={vi.fn()}
+        searchQuery="not present"
+      />,
+    );
+
+    expect(screen.getByText("No matches in this turn.")).toBeInTheDocument();
+    expect(screen.queryByText("Done")).not.toBeInTheDocument();
+  });
 });

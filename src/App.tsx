@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import type { ViewState, CodexSessionInfo, CodexToolCall } from "../shared/types";
+import type { ViewState, CodexSessionInfo, CodexToolCall, CodexTurn } from "../shared/types";
 import { useSession } from "./hooks/useSession";
 import { usePicker, resolveSessionsDir } from "./hooks/usePicker";
 import { useToggleSet } from "./hooks/useToggleSet";
@@ -26,9 +26,11 @@ import {
 } from "./lib/sessionGrouping";
 import { isPrimarySession } from "./lib/sessionFilter";
 import { copyText } from "./lib/copyText";
+import { matchesTurn } from "./lib/turnSearch";
 
 const DEFAULT_SIDEBAR_WIDTH = 260;
 const COLLAPSED_SIDEBAR_WIDTH = 36;
+const EMPTY_TURNS: CodexTurn[] = [];
 
 function findToolByCallId(tools: CodexToolCall[], callId: string): CodexToolCall | null {
   for (const tool of tools) {
@@ -40,6 +42,10 @@ function findToolByCallId(tools: CodexToolCall[], callId: string): CodexToolCall
     }
   }
   return null;
+}
+
+function isReplyTurn(turn: CodexTurn): boolean {
+  return Boolean(turn.error || turn.agent_messages.some((message) => !message.is_reasoning));
 }
 
 export function App() {
@@ -58,6 +64,11 @@ export function App() {
   const [copyNotice, setCopyNotice] = useState<{ message: string; error: boolean } | null>(null);
   const [workerPanelWidth, setWorkerPanelWidth] = useState(380);
   const [workerPanelCallId, setWorkerPanelCallId] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [listSearchQuery, setListSearchQuery] = useState("");
+  const [detailSearchQuery, setDetailSearchQuery] = useState("");
+  const [replyNavTurnId, setReplyNavTurnId] = useState<string | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const session = useSession();
   const picker = usePicker();
@@ -70,7 +81,7 @@ export function App() {
   } = useToggleSet();
 
   const { loadSession, loadMore } = session;
-  const { discoverSessions, updateSessionOngoing } = picker;
+  const { discoverSessions, updateSessionOngoing, setSearchQuery: setPickerSearchQuery } = picker;
 
   // Auto-discover sessions on mount
   const discoveredRef = useRef(false);
@@ -102,15 +113,28 @@ export function App() {
       loadSession(info.path);
       setView("list");
       setSelectedTurn(0);
+      setSearchOpen(false);
+      setListSearchQuery("");
+      setDetailSearchQuery("");
+      setReplyNavTurnId(null);
+      setPickerSearchQuery("");
       clearTools();
     },
-    [loadSession, clearTools],
+    [clearTools, loadSession, setPickerSearchQuery],
   );
 
-  const handleOpenDetail = useCallback((index: number) => {
-    setSelectedTurn(index);
-    setView("detail");
-  }, []);
+  const handleOpenDetail = useCallback(
+    (index: number) => {
+      const turn = session.session?.turns[index];
+      setSelectedTurn(index);
+      setView("detail");
+      setSearchOpen(false);
+      setListSearchQuery("");
+      setDetailSearchQuery("");
+      setReplyNavTurnId(turn && isReplyTurn(turn) ? turn.turn_id : null);
+    },
+    [session.session?.turns],
+  );
 
   const handleLoadMore = useCallback(async () => {
     const direction = session.session?.pagination?.direction;
@@ -128,6 +152,31 @@ export function App() {
       return next;
     });
   }, []);
+
+  const handleOpenSearch = useCallback(() => {
+    setSearchOpen(true);
+    if (view === "picker") {
+      window.requestAnimationFrame(() =>
+        document.querySelector<HTMLInputElement>(".picker__search")?.focus(),
+      );
+    }
+  }, [view]);
+
+  const handleCloseSearch = useCallback(() => {
+    setSearchOpen(false);
+    setPickerSearchQuery("");
+    setListSearchQuery("");
+    setDetailSearchQuery("");
+  }, [setPickerSearchQuery]);
+
+  const handleSearchChange = useCallback(
+    (query: string) => {
+      if (view === "picker") setPickerSearchQuery(query);
+      else if (view === "list") setListSearchQuery(query);
+      else setDetailSearchQuery(query);
+    },
+    [setPickerSearchQuery, view],
+  );
 
   const showCopyNotice = useCallback((message: string, error = false) => {
     if (copyNoticeTimerRef.current !== null) window.clearTimeout(copyNoticeTimerRef.current);
@@ -202,8 +251,49 @@ export function App() {
     [picker.sessions, sessionGroupMode],
   );
 
-  const turns = session.session?.turns ?? [];
+  const turns = session.session?.turns ?? EMPTY_TURNS;
   const selectedTurnData = turns[selectedTurn];
+  const activeSearchQuery =
+    view === "list" ? listSearchQuery : view === "detail" ? "" : picker.searchQuery;
+  const replyTurns = useMemo(
+    () =>
+      turns
+        .map((turn, index) => ({ turn, index }))
+        .filter(
+          ({ turn }) =>
+            isReplyTurn(turn) && (view !== "list" || matchesTurn(turn, activeSearchQuery)),
+        ),
+    [activeSearchQuery, turns, view],
+  );
+  const selectedReplyPosition =
+    view === "detail"
+      ? replyTurns.findIndex(({ index }) => index === selectedTurn)
+      : replyTurns.findIndex(({ turn }) => turn.turn_id === replyNavTurnId);
+
+  const handleReplyNavigation = useCallback(
+    (direction: 1 | -1) => {
+      const current =
+        view === "detail"
+          ? replyTurns.findIndex(({ index }) => index === selectedTurn)
+          : replyTurns.findIndex(({ turn }) => turn.turn_id === replyNavTurnId);
+      const next = current < 0 ? (direction > 0 ? 0 : replyTurns.length - 1) : current + direction;
+      const target = replyTurns[next];
+      if (!target) return;
+
+      setReplyNavTurnId(target.turn.turn_id);
+      if (view === "detail") {
+        setSelectedTurn(target.index);
+        clearTools();
+        setWorkerPanelCallId(null);
+      } else {
+        const element = document.querySelector<HTMLElement>(
+          `.message-list [data-turn-index="${target.index}"]`,
+        );
+        element?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    },
+    [clearTools, replyNavTurnId, replyTurns, selectedTurn, view],
+  );
   const workerPanelTool = useMemo(() => {
     if (!workerPanelCallId || !selectedTurnData) return null;
     return findToolByCallId(selectedTurnData.tool_calls, workerPanelCallId);
@@ -245,6 +335,12 @@ export function App() {
 
   // Keyboard navigation
   useKeyboard({
+    n: () => {
+      if (view === "list" || view === "detail") handleReplyNavigation(1);
+    },
+    p: () => {
+      if (view === "list" || view === "detail") handleReplyNavigation(-1);
+    },
     j: () => {
       if (view === "list") setSelectedTurn((i) => Math.min(i + 1, turns.length - 1));
       if (view === "picker")
@@ -260,6 +356,10 @@ export function App() {
         handleSelectSession(pickerNavigationSessions[pickerSelected]);
     },
     Escape: () => {
+      if (searchOpen) {
+        handleCloseSearch();
+        return;
+      }
       if (workerPanelCallId) {
         closeWorkerPanel();
         return;
@@ -267,6 +367,7 @@ export function App() {
       if (view === "detail") setView("list");
       else if (view === "list") setView("picker");
     },
+    "/": handleOpenSearch,
     q: () => {
       if (workerPanelCallId) {
         closeWorkerPanel();
@@ -294,6 +395,28 @@ export function App() {
         onExpandAll={expandAll}
         onCollapseAll={collapseAll}
         onOpenSettings={() => setShowSettings(true)}
+        searchOpen={searchOpen}
+        searchQuery={
+          view === "picker"
+            ? picker.searchQuery
+            : view === "list"
+              ? listSearchQuery
+              : detailSearchQuery
+        }
+        searchInputRef={searchInputRef}
+        onOpenSearch={handleOpenSearch}
+        onCloseSearch={handleCloseSearch}
+        onSearchChange={handleSearchChange}
+        replyNavigation={
+          view === "list" || view === "detail"
+            ? {
+                position: selectedReplyPosition,
+                total: replyTurns.length,
+                onPrevious: () => handleReplyNavigation(-1),
+                onNext: () => handleReplyNavigation(1),
+              }
+            : undefined
+        }
       />
 
       <div className="app-body">
@@ -374,6 +497,7 @@ export function App() {
               onSearchChange={picker.setSearchQuery}
               onSessionFilterChange={picker.setSessionFilter}
               onGroupModeChange={handleGroupModeChange}
+              onCloseSearch={handleCloseSearch}
             />
           )}
 
@@ -388,10 +512,8 @@ export function App() {
               pagination={session.session.pagination}
               loadingMore={session.loadingMore}
               onLoadMore={handleLoadMore}
-              onSelectTurn={(i) => {
-                setSelectedTurn(i);
-                setView("detail");
-              }}
+              searchQuery={listSearchQuery}
+              onSelectTurn={handleOpenDetail}
             />
           )}
 
@@ -403,6 +525,7 @@ export function App() {
               onBack={() => setView("list")}
               openWorkerCallId={workerPanelCallId}
               onOpenWorkerPanel={handleOpenWorkerPanel}
+              searchQuery={detailSearchQuery}
             />
           )}
         </div>

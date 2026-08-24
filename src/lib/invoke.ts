@@ -31,6 +31,11 @@ const routes: Record<string, Route> = {
       maxBytes: a.maxBytes,
     }),
   },
+  get_session_status: {
+    method: "POST",
+    path: "/api/session/status",
+    body: (a) => ({ path: a.path }),
+  },
   watch_session: {
     method: "POST",
     path: "/api/session/watch",

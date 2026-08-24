@@ -24,6 +24,7 @@ interface SessionPickerProps {
   onSearchChange: (q: string) => void;
   onSessionFilterChange: (filter: SessionFilter) => void;
   onGroupModeChange?: (mode: SessionGroupMode) => void;
+  onCloseSearch?: () => void;
 }
 
 const NOOP_GROUP_MODE_CHANGE = () => {};
@@ -39,6 +40,7 @@ export function SessionPicker({
   onSearchChange,
   onSessionFilterChange,
   onGroupModeChange = NOOP_GROUP_MODE_CHANGE,
+  onCloseSearch,
 }: SessionPickerProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -105,6 +107,9 @@ export function SessionPicker({
           placeholder="Search sessions…"
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") onCloseSearch?.();
+          }}
           spellCheck={false}
         />
       </div>

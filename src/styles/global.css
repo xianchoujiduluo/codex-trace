@@ -796,6 +796,60 @@ body {
   flex-shrink: 0;
 }
 
+.view-toolbar__search {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  min-width: 180px;
+  padding: 0 5px 0 8px;
+  color: var(--text-dim);
+  background: var(--bg-elevated);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+}
+
+.view-toolbar__search input {
+  width: 150px;
+  min-width: 0;
+  padding: 0;
+  color: var(--text-primary);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font: inherit;
+  font-size: 11px;
+}
+
+.view-toolbar__search button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  color: var(--text-dim);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.view-toolbar__search button:hover {
+  color: var(--text-primary);
+}
+
+.view-toolbar__reply-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.view-toolbar__reply-position {
+  min-width: 36px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
 /* ---- Keybind Bar ---- */
 
 .keybind-bar {
@@ -902,30 +956,6 @@ body {
   overflow-y: auto;
   padding: 8px 0;
   scroll-behavior: smooth;
-}
-
-/* ---- Codex reply navigation ---- */
-
-.turn-nav {
-  position: sticky;
-  top: -8px;
-  z-index: 4;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 4px 12px;
-  margin-bottom: 4px;
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border);
-}
-
-.turn-nav__position {
-  font-size: 11px;
-  color: var(--text-dim);
-  min-width: 36px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
 }
 
 .turn-list__turn {
