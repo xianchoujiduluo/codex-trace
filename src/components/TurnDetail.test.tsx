@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type {
   AgentMessage,
+  CodexSession,
   CodexToolCall,
   CodexTurn,
   TokenInfo,
@@ -93,11 +94,75 @@ function makeTool(overrides: Partial<CodexToolCall> = {}): CodexToolCall {
   };
 }
 
+function makeWorkerSession(id = "worker-1"): CodexSession {
+  return {
+    id,
+    timestamp: "2026-04-26T10:00:00Z",
+    cwd: "/tmp/worker",
+    originator: null,
+    cli_version: null,
+    model_provider: null,
+    git: null,
+    instructions: null,
+    turns: [],
+    is_ongoing: true,
+    total_tokens: null,
+    thread_name: null,
+    spawned_worker_ids: [],
+    path: `/tmp/${id}.jsonl`,
+    ai_title: null,
+    is_headless: false,
+    has_missing_spawn_metadata: false,
+    is_archived: false,
+    approval_mode: null,
+    history_base_thread_id: null,
+    pagination: null,
+  };
+}
+
 function renderTurnDetail(turn: CodexTurn) {
   render(<TurnDetail turn={turn} expanded={new Set()} onToggle={vi.fn()} onBack={vi.fn()} />);
 }
 
 describe("TurnDetail", () => {
+  it("lists linked agent sessions and opens their execution details", () => {
+    const worker = makeWorkerSession();
+    const spawn = makeTool({
+      call_id: "spawn-1",
+      kind: "spawn_agent",
+      name: "spawn_agent",
+      output: '{"agent_id":"worker-1","nickname":"Planner"}',
+      worker_session: worker,
+    });
+    const onOpenWorkerPanel = vi.fn();
+
+    render(
+      <TurnDetail
+        turn={makeTurn({ tool_calls: [spawn] })}
+        expanded={new Set()}
+        onToggle={vi.fn()}
+        onBack={vi.fn()}
+        onOpenWorkerPanel={onOpenWorkerPanel}
+      />,
+    );
+
+    expect(screen.getByText("Agents (1)")).toBeInTheDocument();
+    const agentButton = screen.getByRole("button", { name: /Planner \(worker-1\)/ });
+    expect(agentButton).toHaveTextContent("Active");
+    fireEvent.click(agentButton);
+    expect(onOpenWorkerPanel).toHaveBeenCalledWith(spawn);
+  });
+
+  it("keeps the agent execution section hidden when worker metadata is unavailable", () => {
+    renderTurnDetail(
+      makeTurn({
+        tool_calls: [makeTool({ kind: "spawn_agent", name: "spawn_agent" })],
+      }),
+    );
+
+    expect(screen.queryByText(/Agents \(/)).not.toBeInTheDocument();
+  });
+
   it("shows context-left metadata using Codex's last-token usage", () => {
     renderTurnDetail(makeTurn());
 

@@ -4024,6 +4024,55 @@ body {
   gap: 6px;
 }
 
+.turn-detail__section--agents {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+
+.turn-detail__section--agents .turn-detail__section-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.turn-detail__agents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.turn-detail__agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--collab-badge);
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.turn-detail__agent:hover {
+  background: var(--bg-hover);
+}
+
+.turn-detail__agent--static {
+  cursor: default;
+}
+
+.turn-detail__agent--static:hover {
+  background: var(--bg-elevated);
+}
+
+.turn-detail__agent-status {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
 /* Complementary item — assistant commentary as an inline, always-expanded timeline item */
 .complementary-item {
   margin-bottom: 10px;

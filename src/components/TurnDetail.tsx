@@ -2,9 +2,10 @@ import type { AgentMessage, CodexToolCall, CodexTurn } from "../../shared/types"
 import { RawExecDetails, ToolCallItem } from "./ToolCallItem";
 import { ComplementaryItem } from "./ComplementaryItem";
 import { OngoingDots } from "./OngoingDots";
-import { BackIcon, CodexIcon } from "./Icons";
+import { BackIcon, CodexIcon, SpawnIcon } from "./Icons";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { CopyMessageButton } from "./CopyMessageButton";
+import { workerPanelTitle } from "./WorkerPanel";
 import { shortModel, formatExactTime } from "../lib/format";
 import { getContextColor, getModelColor } from "../lib/theme";
 import { contextRemainingPercent, formatTokens, formatDuration } from "../../shared/format";
@@ -122,6 +123,9 @@ export function TurnDetail({
     visibleFinalAnswer !== null;
   const model = turn.model ? shortModel(turn.model) : "";
   const modelColor = turn.model ? getModelColor(turn.model) : undefined;
+  const linkedAgents = turn.tool_calls.filter(
+    (tool) => tool.kind === "spawn_agent" && tool.worker_session,
+  );
 
   const metaParts: string[] = [];
   if (turn.duration_ms) metaParts.push(formatDuration(turn.duration_ms));
@@ -176,6 +180,43 @@ export function TurnDetail({
 
       <div className="turn-detail__body">
         <div className="turn-detail__content">
+          {linkedAgents.length > 0 && (
+            <div className="turn-detail__section turn-detail__section--agents">
+              <div className="turn-detail__section-label">
+                <SpawnIcon /> Agents ({linkedAgents.length})
+              </div>
+              <div className="turn-detail__agents">
+                {linkedAgents.map((tool) => {
+                  const worker = tool.worker_session!;
+                  const label = workerPanelTitle(tool, worker);
+                  const control = onOpenWorkerPanel ? (
+                    <button
+                      type="button"
+                      className="turn-detail__agent"
+                      onClick={() => onOpenWorkerPanel(tool)}
+                      title={`Open ${label} execution details`}
+                    >
+                      <SpawnIcon />
+                      <span>{label}</span>
+                      <span className="turn-detail__agent-status">
+                        {worker.is_ongoing ? "Active" : "Complete"}
+                      </span>
+                    </button>
+                  ) : (
+                    <span className="turn-detail__agent turn-detail__agent--static">
+                      <SpawnIcon />
+                      <span>{label}</span>
+                      <span className="turn-detail__agent-status">
+                        {worker.is_ongoing ? "Active" : "Complete"}
+                      </span>
+                    </span>
+                  );
+                  return <div key={tool.call_id}>{control}</div>;
+                })}
+              </div>
+            </div>
+          )}
+
           {turnTokens && (
             <div className="turn-detail__token-summary">
               <div className="turn-detail__section-label">This turn</div>
