@@ -34,7 +34,7 @@ const routes: Record<string, Route> = {
   get_session_status: {
     method: "POST",
     path: "/api/session/status",
-    body: (a) => ({ path: a.path }),
+    body: (a) => ({ path: a.path, knownSourceSizeBytes: a.knownSourceSizeBytes }),
   },
   watch_session: {
     method: "POST",

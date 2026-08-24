@@ -300,6 +300,12 @@ export interface SessionStatus {
   path: string;
   is_ongoing: boolean;
   source_size_bytes: number;
+  updated_turns: CodexTurn[];
+  total_turns: number;
+  total_tokens: TokenInfo | null;
+  thread_name: string | null;
+  spawned_worker_ids: string[];
+  has_missing_spawn_metadata: boolean;
 }
 
 export interface SessionPatch {

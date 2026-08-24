@@ -41,10 +41,11 @@ pub async fn load_session(
 #[tauri::command]
 pub async fn get_session_status(
     path: String,
+    known_source_size_bytes: Option<u64>,
     state: State<'_, Arc<AppState>>,
 ) -> Result<crate::parser::session::SessionStatus, String> {
     let app_state = state.inner().clone();
-    tokio::task::spawn_blocking(move || app_state.session_status(&path))
+    tokio::task::spawn_blocking(move || app_state.session_status(&path, known_source_size_bytes))
         .await
         .map_err(|error| error.to_string())?
 }

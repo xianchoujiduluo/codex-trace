@@ -4,6 +4,20 @@ All notable changes to codex-trace are documented here. Versions follow
 [semantic versioning](https://semver.org/), and this file follows
 [Keep a Changelog](https://keepachangelog.com/) conventions.
 
+## [0.4.14] — 2026-08-24
+
+### Fixed
+
+- **Session completion reconciliation**. Repair missed terminal SSE updates so completed turns
+  no longer remain displayed as active, and avoid repeating unchanged turn data during polling.
+
+### Added
+
+- **Release result email**. Send the status of release and Docker jobs through the configured SMTP
+  account after each release workflow run.
+
+[0.4.14]: https://github.com/xianchoujiduluo/codex-trace/releases/tag/v0.4.14
+
 ## [0.4.13] — 2026-08-24
 
 ### Added

@@ -305,3 +305,45 @@ jobs:
             --notes-file "$RUNNER_TEMP/notes.md" \
             --latest
           echo "Created release $TAG at $GITHUB_SHA with no build artifacts."
+
+  notify:
+    name: Email release result
+    needs:
+      [
+        guard,
+        notes,
+        build-macos,
+        build-linux,
+        build-windows,
+        docker-publish,
+        publish,
+        manual-release,
+      ]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send release result email
+        uses: dawidd6/action-send-mail@v6
+        with:
+          server_address: ${{ vars.SMTP_HOST }}
+          server_port: ${{ vars.SMTP_PORT }}
+          secure: true
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          from: ${{ secrets.SMTP_FROM }}
+          to: ${{ secrets.NOTIFY_EMAIL_TO }}
+          subject: "[codex-trace] ${{ github.ref_name }} release workflow result"
+          body: |
+            Repository: ${{ github.repository }}
+            Ref: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}
+            Event: ${{ github.event_name }}
+
+            Guard: ${{ needs.guard.result }}
+            Release notes: ${{ needs.notes.result }}
+            macOS: ${{ needs['build-macos'].result }}
+            Linux: ${{ needs['build-linux'].result }}
+            Windows: ${{ needs['build-windows'].result }}
+            Docker: ${{ needs['docker-publish'].result }}
+            Publish: ${{ needs.publish.result }}
+            Manual release: ${{ needs['manual-release'].result }}

@@ -60,6 +60,12 @@ pub struct SessionStatus {
     pub path: String,
     pub is_ongoing: bool,
     pub source_size_bytes: u64,
+    pub updated_turns: Vec<CodexTurn>,
+    pub total_turns: usize,
+    pub total_tokens: Option<TokenInfo>,
+    pub thread_name: Option<String>,
+    pub spawned_worker_ids: Vec<String>,
+    pub has_missing_spawn_metadata: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -358,7 +364,52 @@ impl IncrementalSession {
             path: self.session.path.clone(),
             is_ongoing: self.session.is_ongoing && !self.has_session_end && file_fresh,
             source_size_bytes: self.source_size_bytes,
+            updated_turns: Vec::new(),
+            total_turns: self.session.turns.len(),
+            total_tokens: self.session.total_tokens.clone(),
+            thread_name: self.session.thread_name.clone(),
+            spawned_worker_ids: self.session.spawned_worker_ids.clone(),
+            has_missing_spawn_metadata: self.session.has_missing_spawn_metadata,
         }
+    }
+
+    /// Refresh the cached parser and return only the turn data needed to repair a missed live
+    /// update. The latest turn is returned once when the caller's source-size cursor is stale;
+    /// an inferred stale completion is also returned when no terminal log event was observed.
+    pub fn status_reconciliation(
+        &mut self,
+        known_source_size_bytes: Option<u64>,
+    ) -> Result<SessionStatus, String> {
+        let refresh = self.refresh()?;
+        let mut status = self.status_snapshot();
+        status.updated_turns = match refresh {
+            SessionRefresh::Unchanged => Vec::new(),
+            SessionRefresh::Full { session, .. } => session.turns,
+            SessionRefresh::Patch(patch) => patch.updated_turns,
+        };
+
+        // A small session page does not expose a source-size cursor to the client. An unknown
+        // cursor must not make an already-complete turn look changed on every poll.
+        let source_size_changed = known_source_size_bytes
+            .is_some_and(|known_size| known_size != status.source_size_bytes);
+        let latest_is_ongoing = self
+            .session
+            .turns
+            .last()
+            .is_some_and(|turn| turn.status == TurnStatus::Ongoing);
+        if (source_size_changed || (!status.is_ongoing && latest_is_ongoing))
+            && status.updated_turns.is_empty()
+        {
+            if let Some(last_turn) = self.session.turns.last() {
+                let mut latest_turn = last_turn.clone();
+                if !status.is_ongoing && latest_turn.status == TurnStatus::Ongoing {
+                    latest_turn.status = TurnStatus::Aborted;
+                }
+                status.updated_turns.push(latest_turn);
+            }
+        }
+
+        Ok(status)
     }
 
     pub fn refresh(&mut self) -> Result<SessionRefresh, String> {

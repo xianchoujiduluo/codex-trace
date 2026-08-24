@@ -3,6 +3,7 @@ import { invoke } from "../lib/invoke";
 import type {
   CodexSession,
   SessionPageDirection,
+  SessionPatch,
   SessionStatus,
   SessionUpdatePayload,
 } from "../../shared/types";
@@ -36,6 +37,53 @@ function mergeTurns(
   });
 }
 
+function applySessionUpdate(session: CodexSession, update: SessionPatch | SessionStatus) {
+  const existingTotalTurns = session.pagination?.total_turns ?? session.turns.length;
+  const sourceSizeUnchanged =
+    !session.pagination || session.pagination.source_size_bytes === update.source_size_bytes;
+  const workersUnchanged =
+    session.spawned_worker_ids.length === update.spawned_worker_ids.length &&
+    session.spawned_worker_ids.every(
+      (workerId, index) => workerId === update.spawned_worker_ids[index],
+    );
+  const tokensUnchanged =
+    JSON.stringify(session.total_tokens) === JSON.stringify(update.total_tokens);
+  if (
+    update.updated_turns.length === 0 &&
+    session.is_ongoing === update.is_ongoing &&
+    sourceSizeUnchanged &&
+    existingTotalTurns === update.total_turns &&
+    tokensUnchanged &&
+    session.thread_name === update.thread_name &&
+    workersUnchanged &&
+    session.has_missing_spawn_metadata === update.has_missing_spawn_metadata
+  ) {
+    return session;
+  }
+
+  const existing = new Map(session.turns.map((turn) => [turn.turn_id, turn]));
+  for (const turn of update.updated_turns) existing.set(turn.turn_id, turn);
+  const turns = [...existing.values()];
+  turns.sort((a, b) => (a.started_at ?? 0) - (b.started_at ?? 0));
+
+  return {
+    ...session,
+    turns,
+    is_ongoing: update.is_ongoing,
+    total_tokens: update.total_tokens,
+    thread_name: update.thread_name,
+    spawned_worker_ids: update.spawned_worker_ids,
+    has_missing_spawn_metadata: update.has_missing_spawn_metadata,
+    pagination: session.pagination
+      ? {
+          ...session.pagination,
+          total_turns: update.total_turns,
+          source_size_bytes: update.source_size_bytes,
+        }
+      : session.pagination,
+  };
+}
+
 export function useSession() {
   const [state, setState] = useState<SessionState>({
     session: null,
@@ -44,6 +92,7 @@ export function useSession() {
     sessionPath: "",
   });
   const requestIdRef = useRef(0);
+  const sourceSizeRef = useRef<number | null>(null);
 
   const loadSession = useCallback(async (path: string, options: LoadSessionOptions = {}) => {
     const requestId = ++requestIdRef.current;
@@ -60,6 +109,7 @@ export function useSession() {
         maxBytes: options.maxBytes,
       });
       if (requestId !== requestIdRef.current) return;
+      sourceSizeRef.current = session.pagination?.source_size_bytes ?? null;
       setState({ session, loading: false, loadingMore: false, sessionPath: path });
       try {
         await invoke<void>("watch_session", { path });
@@ -89,6 +139,7 @@ export function useSession() {
         cursor: pagination.next_cursor,
         maxBytes: pagination.page_bytes,
       });
+      sourceSizeRef.current = page.pagination?.source_size_bytes ?? sourceSizeRef.current;
       const addedCount = page.turns.filter(
         (turn) => !current.turns.some((existing) => existing.turn_id === turn.turn_id),
       ).length;
@@ -116,6 +167,8 @@ export function useSession() {
     if (payload.kind === "full" && payload.session) {
       setState((prev) => {
         if (prev.sessionPath && payload.session?.path !== prev.sessionPath) return prev;
+        sourceSizeRef.current =
+          payload.session?.pagination?.source_size_bytes ?? sourceSizeRef.current;
         return { ...prev, session: payload.session };
       });
       return;
@@ -125,64 +178,27 @@ export function useSession() {
     if (!patch) return;
     setState((prev) => {
       if (!prev.session || (prev.sessionPath && patch.path !== prev.sessionPath)) return prev;
-      const existing = new Map(prev.session.turns.map((turn) => [turn.turn_id, turn]));
-      for (const turn of patch.updated_turns) existing.set(turn.turn_id, turn);
-      const turns = [...existing.values()];
-      turns.sort((a, b) => (a.started_at ?? 0) - (b.started_at ?? 0));
-      return {
-        ...prev,
-        session: {
-          ...prev.session,
-          turns,
-          is_ongoing: patch.is_ongoing,
-          total_tokens: patch.total_tokens,
-          thread_name: patch.thread_name,
-          spawned_worker_ids: patch.spawned_worker_ids,
-          has_missing_spawn_metadata: patch.has_missing_spawn_metadata,
-          pagination: prev.session.pagination
-            ? {
-                ...prev.session.pagination,
-                total_turns: patch.total_turns,
-                source_size_bytes: patch.source_size_bytes,
-              }
-            : prev.session.pagination,
-        },
-      };
+      sourceSizeRef.current = patch.source_size_bytes;
+      return { ...prev, session: applySessionUpdate(prev.session, patch) };
     });
   });
 
   useEffect(() => {
     if (!state.sessionPath) return;
 
+    const path = state.sessionPath;
     let cancelled = false;
     const reconcileStatus = async () => {
       try {
         const status = await invoke<SessionStatus>("get_session_status", {
-          path: state.sessionPath,
+          path,
+          knownSourceSizeBytes: sourceSizeRef.current,
         });
-        if (cancelled) return;
+        if (cancelled || status.path !== path) return;
+        sourceSizeRef.current = status.source_size_bytes;
         setState((prev) => {
           if (!prev.session || prev.sessionPath !== status.path) return prev;
-          const pagination = prev.session.pagination
-            ? {
-                ...prev.session.pagination,
-                source_size_bytes: status.source_size_bytes,
-              }
-            : prev.session.pagination;
-          if (
-            prev.session.is_ongoing === status.is_ongoing &&
-            prev.session.pagination?.source_size_bytes === status.source_size_bytes
-          ) {
-            return prev;
-          }
-          return {
-            ...prev,
-            session: {
-              ...prev.session,
-              is_ongoing: status.is_ongoing,
-              pagination,
-            },
-          };
+          return { ...prev, session: applySessionUpdate(prev.session, status) };
         });
       } catch {
         // The SSE stream and session watcher remain the primary live-update paths. A failed

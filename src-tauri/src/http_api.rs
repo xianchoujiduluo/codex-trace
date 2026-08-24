@@ -427,6 +427,8 @@ struct PathBody {
     cursor: Option<usize>,
     #[serde(rename = "maxBytes")]
     max_bytes: Option<usize>,
+    #[serde(rename = "knownSourceSizeBytes")]
+    known_source_size_bytes: Option<u64>,
 }
 
 async fn api_load_session(
@@ -459,7 +461,10 @@ async fn api_session_status(
     Json(body): Json<PathBody>,
 ) -> Response {
     let app_state = state.app_state.clone();
-    let result = tokio::task::spawn_blocking(move || app_state.session_status(&body.path)).await;
+    let result = tokio::task::spawn_blocking(move || {
+        app_state.session_status(&body.path, body.known_source_size_bytes)
+    })
+    .await;
     let status = match result {
         Ok(Ok(status)) => status,
         Ok(Err(e)) => return err_response(session_load_error_status(&e), e),

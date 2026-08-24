@@ -151,13 +151,16 @@ impl AppState {
         Ok(session.session().clone())
     }
 
-    /// Refresh the cached parser and return only the activity fields needed to reconcile a
-    /// live UI after an SSE reconnect or a missed filesystem notification.
-    pub fn session_status(&self, path: &str) -> Result<SessionStatus, String> {
+    /// Refresh the cached parser and return only the activity and changed-turn fields needed to
+    /// reconcile a live UI after an SSE reconnect or a missed filesystem notification.
+    pub fn session_status(
+        &self,
+        path: &str,
+        known_source_size_bytes: Option<u64>,
+    ) -> Result<SessionStatus, String> {
         let entry = self.parsed_session(path)?;
         let mut session = entry.lock().map_err(|e| e.to_string())?;
-        let _ = session.refresh()?;
-        Ok(session.status_snapshot())
+        session.status_reconciliation(known_source_size_bytes)
     }
 
     /// Refresh a cached parser and return only the changed data for the live watcher.
@@ -606,7 +609,7 @@ mod tests {
         .unwrap();
 
         let state = make_state();
-        let active = state.session_status(path.to_str().unwrap()).unwrap();
+        let active = state.session_status(path.to_str().unwrap(), None).unwrap();
         assert!(active.is_ongoing);
 
         let mut file = std::fs::OpenOptions::new()
@@ -619,9 +622,24 @@ mod tests {
         )
         .unwrap();
 
-        let completed = state.session_status(path.to_str().unwrap()).unwrap();
+        let completed = state
+            .session_status(path.to_str().unwrap(), Some(active.source_size_bytes))
+            .unwrap();
         assert!(!completed.is_ongoing);
         assert!(completed.source_size_bytes > active.source_size_bytes);
+        assert_eq!(completed.updated_turns.len(), 1);
+        assert_eq!(
+            completed.updated_turns[0].status,
+            crate::parser::turn::TurnStatus::Complete
+        );
+
+        let unchanged = state
+            .session_status(path.to_str().unwrap(), Some(completed.source_size_bytes))
+            .unwrap();
+        assert!(unchanged.updated_turns.is_empty());
+
+        let without_cursor = state.session_status(path.to_str().unwrap(), None).unwrap();
+        assert!(without_cursor.updated_turns.is_empty());
     }
 
     #[test]
