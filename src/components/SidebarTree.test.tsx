@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CodexSessionInfo } from "../../shared/types";
+
+const downloadSessionMock = vi.hoisted(() => vi.fn());
+vi.mock("../lib/downloadSession", () => ({ downloadSession: downloadSessionMock }));
+
 import { SidebarTree } from "./SidebarTree";
 
 function makeSession(overrides: Partial<CodexSessionInfo> = {}): CodexSessionInfo {
@@ -37,6 +41,10 @@ function makeSession(overrides: Partial<CodexSessionInfo> = {}): CodexSessionInf
 }
 
 describe("SidebarTree", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("shows empty state when no sessions", () => {
     render(
       <SidebarTree
@@ -186,6 +194,56 @@ describe("SidebarTree", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("2026/04/26/rollout-abc.jsonl"));
     expect(onSelect).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Copied session path" })).toBeInTheDocument();
+  });
+
+  it("downloads the source session file without opening the session", async () => {
+    const onSelect = vi.fn();
+    const session = makeSession({
+      path: "/home/user/.codex/sessions/2026/04/26/rollout-source.jsonl",
+      thread_name: "Downloadable session",
+    });
+    render(
+      <SidebarTree
+        sessions={[session]}
+        selectedPath={null}
+        collapsedDates={new Set()}
+        onSelectSession={onSelect}
+        onToggleDate={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Download session file" }));
+
+    await waitFor(() => expect(downloadSessionMock).toHaveBeenCalledWith(session.path));
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Downloaded session file" })).toBeInTheDocument();
+  });
+
+  it("reports a source session download failure", async () => {
+    const onDownloadError = vi.fn();
+    downloadSessionMock.mockRejectedValueOnce(new Error("file is unavailable"));
+    const session = makeSession({ thread_name: "Unavailable session" });
+    render(
+      <SidebarTree
+        sessions={[session]}
+        selectedPath={null}
+        collapsedDates={new Set()}
+        onSelectSession={vi.fn()}
+        onToggleDate={vi.fn()}
+        onDownloadError={onDownloadError}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Download session file" }));
+
+    await waitFor(() =>
+      expect(onDownloadError).toHaveBeenCalledWith(
+        "Could not download session file: file is unavailable",
+      ),
+    );
+    expect(
+      screen.getByRole("button", { name: "Retry downloading session file" }),
+    ).toBeInTheDocument();
   });
 
   it("shows checkboxes and toggles sessions without opening them in selection mode", () => {

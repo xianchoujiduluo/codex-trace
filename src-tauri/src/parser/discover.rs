@@ -532,6 +532,25 @@ pub(crate) fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
                             push_unique(&mut spawned_worker_ids, new_id.to_string());
                         }
                     }
+                    // Codex v0.152.1 multi-agent v2 puts the child session ID on the
+                    // SubAgentActivity item rather than in function_call_output.task_name.
+                    "item_completed" => {
+                        let item = v
+                            .get("payload")
+                            .and_then(|payload| payload.get("item"))
+                            .unwrap_or(&Value::Null);
+                        if item.get("type").and_then(Value::as_str) == Some("SubAgentActivity")
+                            && item.get("kind").and_then(Value::as_str) == Some("started")
+                        {
+                            if let Some(new_id) = item
+                                .get("agent_thread_id")
+                                .and_then(Value::as_str)
+                                .filter(|id| !id.is_empty())
+                            {
+                                push_unique(&mut spawned_worker_ids, new_id.to_string());
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -818,6 +837,45 @@ mod tests {
         assert!(child.is_inline_worker);
         assert_eq!(child.worker_nickname.as_deref(), Some("Parfit"));
         assert_eq!(child.worker_role.as_deref(), Some("worker"));
+    }
+
+    #[test]
+    fn discover_sessions_links_v2_subagent_activity() {
+        let tmp = tempdir().unwrap();
+        let day_dir = tmp.path().join("2026/09/02");
+        std::fs::create_dir_all(&day_dir).unwrap();
+
+        let parent_path = day_dir.join("rollout-2026-09-02T03-18-22-parent-v2.jsonl");
+        std::fs::write(
+            &parent_path,
+            [
+                r#"{"timestamp":"2026-09-02T03:18:22Z","type":"session_meta","payload":{"id":"parent-v2","timestamp":"2026-09-02T03:18:22Z","cli_version":"0.152.1","source":"cli"}}"#,
+                r#"{"timestamp":"2026-09-02T03:18:26Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+                r#"{"timestamp":"2026-09-02T03:18:26Z","type":"event_msg","payload":{"type":"item_completed","turn_id":"turn-1","item":{"type":"SubAgentActivity","id":"call_spawn_v2","kind":"started","agent_thread_id":"worker-thread-v2","agent_path":"/root/package_inspect"}}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let child_path = day_dir.join("rollout-2026-09-02T03-18-27-worker-thread-v2.jsonl");
+        std::fs::write(
+            &child_path,
+            r#"{"timestamp":"2026-09-02T03:18:27Z","type":"session_meta","payload":{"id":"worker-thread-v2","timestamp":"2026-09-02T03:18:27Z","cli_version":"0.152.1","cwd":"/tmp/worker"}}"#,
+        )
+        .unwrap();
+
+        let sessions = discover_sessions(tmp.path()).unwrap();
+        let parent = sessions
+            .iter()
+            .find(|session| session.id == "parent-v2")
+            .unwrap();
+        let child = sessions
+            .iter()
+            .find(|session| session.id == "worker-thread-v2")
+            .unwrap();
+
+        assert_eq!(parent.spawned_worker_ids, vec!["worker-thread-v2"]);
+        assert!(child.is_inline_worker);
     }
 
     #[test]

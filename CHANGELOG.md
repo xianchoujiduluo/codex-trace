@@ -4,6 +4,20 @@ All notable changes to codex-trace are documented here. Versions follow
 [semantic versioning](https://semver.org/), and this file follows
 [Keep a Changelog](https://keepachangelog.com/) conventions.
 
+## [0.4.15] — 2026-09-02
+
+### Added
+
+- **Session source downloads**. Download the original JSONL session file directly from the
+  sidebar, including the source filename and compressed rollout files.
+
+### Fixed
+
+- **Codex 0.152.1 collaboration traces**. Link current `SubAgentActivity` records to their worker
+  sessions so spawned agent details are available in the parent session.
+
+[0.4.15]: https://github.com/xianchoujiduluo/codex-trace/releases/tag/v0.4.15
+
 ## [0.4.14] — 2026-08-24
 
 ### Fixed

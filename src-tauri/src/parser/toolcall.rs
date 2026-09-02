@@ -1,5 +1,5 @@
 use super::redact::redact_secrets;
-use super::spawn::parse_spawn_agent_output;
+use super::spawn::is_spawn_agent_output_success;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -1787,7 +1787,7 @@ fn code_mode_mcp_parts(name: &str) -> (Option<String>, Option<String>) {
 }
 
 fn spawn_agent_status(output: &str) -> String {
-    if parse_spawn_agent_output(output).is_some() {
+    if is_spawn_agent_output_success(output) {
         "completed"
     } else if output.trim().is_empty() {
         "unknown"

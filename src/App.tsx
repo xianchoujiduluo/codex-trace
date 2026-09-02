@@ -468,6 +468,7 @@ export function App() {
               onSelectSession={handleSelectSession}
               onToggleSessionSelection={handleToggleSessionSelection}
               onToggleDate={handleToggleGroup}
+              onDownloadError={(message) => showCopyNotice(message, true)}
             />
           )}
         </div>

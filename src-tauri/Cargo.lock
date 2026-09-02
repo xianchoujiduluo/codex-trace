@@ -526,7 +526,7 @@ dependencies = [
 
 [[package]]
 name = "codex-trace"
-version = "0.4.14"
+version = "0.4.15"
 dependencies = [
  "axum",
  "chrono",
@@ -546,6 +546,7 @@ dependencies = [
  "thiserror 2.0.19",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "tower-http 0.7.0",
  "uuid",
  "zstd",

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use super::entry::{parse_timestamp_millis, parse_timestamp_secs, RawEntry};
 use super::redact::redact_secrets;
-use super::spawn::parse_spawn_agent_output;
+use super::spawn::{parse_spawn_agent_metadata, parse_spawn_agent_output};
 use super::toolcall::{ToolCall, ToolCallBuilder, ToolKind};
 
 /// Codex's own sentinel text for a synthetic `agent_message` event it inserts at the end of
@@ -248,6 +248,7 @@ pub struct IncrementalTurnParser {
     turns: IndexMap<String, CodexTurn>,
     current_turn_id: Option<String>,
     tool_builders: HashMap<String, ToolCallBuilder>,
+    spawn_nicknames: HashMap<String, String>,
     has_task_started: bool,
     synthetic_turn_counter: u32,
     call_order: HashMap<String, usize>,
@@ -259,6 +260,7 @@ impl IncrementalTurnParser {
             turns: IndexMap::new(),
             current_turn_id: None,
             tool_builders: HashMap::new(),
+            spawn_nicknames: HashMap::new(),
             has_task_started,
             synthetic_turn_counter: 0,
             call_order: HashMap::new(),
@@ -295,6 +297,7 @@ impl IncrementalTurnParser {
                 &mut self.turns,
                 &mut self.current_turn_id,
                 &mut self.tool_builders,
+                &self.spawn_nicknames,
                 self.has_task_started,
                 &mut self.synthetic_turn_counter,
                 index,
@@ -308,6 +311,7 @@ impl IncrementalTurnParser {
                 &mut self.turns,
                 &self.current_turn_id,
                 &mut self.tool_builders,
+                &mut self.spawn_nicknames,
             ),
             "turn_context" => handle_turn_context(entry, &mut self.turns, &self.current_turn_id),
             "compacted" => {
@@ -405,11 +409,13 @@ fn call_id_of(entry: &RawEntry) -> Option<String> {
     None
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_event_msg(
     entry: &RawEntry,
     turns: &mut indexmap::IndexMap<String, CodexTurn>,
     current_turn_id: &mut Option<String>,
     tool_builders: &mut HashMap<String, ToolCallBuilder>,
+    spawn_nicknames: &HashMap<String, String>,
     has_task_started: bool,
     synthetic_counter: &mut u32,
     index: usize,
@@ -487,7 +493,7 @@ fn handle_event_msg(
         // `agent_message` event is still present in older rollouts, but current
         // assistant and user text lives under the nested `item` object instead.
         "item_completed" => {
-            handle_item_completed(entry, turns, current_turn_id, index);
+            handle_item_completed(entry, turns, current_turn_id, spawn_nicknames, index);
         }
 
         "user_message" => {
@@ -930,6 +936,7 @@ fn handle_item_completed(
     entry: &RawEntry,
     turns: &mut indexmap::IndexMap<String, CodexTurn>,
     current_turn_id: &Option<String>,
+    spawn_nicknames: &HashMap<String, String>,
     index: usize,
 ) {
     let payload = &entry.payload;
@@ -999,6 +1006,73 @@ fn handle_item_completed(
             turn.tool_calls
                 .push(file_change_tool(payload, item, turn.cwd.as_deref()));
             turn.tool_call_orders.push(index);
+        }
+        // Codex v0.152.1 multi-agent v2 records the child session in a completed
+        // SubAgentActivity item. The function_call_output only contains task_name and
+        // nickname, so it cannot be used as the worker session ID.
+        "SubAgentActivity" if item.get("kind").and_then(Value::as_str) == Some("started") => {
+            let call_id = item
+                .get("id")
+                .and_then(Value::as_str)
+                .filter(|id| !id.is_empty())
+                .unwrap_or("");
+            let new_session_id = item
+                .get("agent_thread_id")
+                .and_then(Value::as_str)
+                .filter(|id| !id.is_empty())
+                .unwrap_or("");
+            if call_id.is_empty() || new_session_id.is_empty() {
+                return;
+            }
+
+            let agent_path = item.get("agent_path").and_then(Value::as_str).unwrap_or("");
+            let agent_nickname = spawn_nicknames
+                .get(call_id)
+                .filter(|nickname| !nickname.is_empty())
+                .cloned()
+                .or_else(|| {
+                    item.get("agent_nickname")
+                        .or_else(|| item.get("nickname"))
+                        .and_then(Value::as_str)
+                        .filter(|nickname| !nickname.is_empty())
+                        .map(String::from)
+                })
+                .unwrap_or_else(|| {
+                    agent_path
+                        .rsplit('/')
+                        .find(|part| !part.is_empty())
+                        .unwrap_or("")
+                        .to_string()
+                });
+            let agent_role = item
+                .get("agent_role")
+                .or_else(|| item.get("agent_type"))
+                .and_then(Value::as_str)
+                .filter(|role| !role.is_empty())
+                .unwrap_or("worker")
+                .to_string();
+
+            if let Some(spawn) = turn
+                .collab_spawns
+                .iter_mut()
+                .find(|spawn| spawn.call_id == call_id)
+            {
+                spawn.new_session_id = new_session_id.to_string();
+                if !agent_nickname.is_empty() {
+                    spawn.agent_nickname = agent_nickname;
+                }
+                spawn.agent_role = agent_role;
+            } else {
+                turn.collab_spawns.push(CollabSpawn {
+                    call_id: call_id.to_string(),
+                    new_session_id: new_session_id.to_string(),
+                    agent_nickname,
+                    agent_role,
+                    model: None,
+                    reasoning_effort: None,
+                    prompt_preview: String::new(),
+                });
+            }
         }
         _ => {}
     }
@@ -1194,6 +1268,7 @@ fn handle_response_item(
     turns: &mut indexmap::IndexMap<String, CodexTurn>,
     current_turn_id: &Option<String>,
     tool_builders: &mut HashMap<String, ToolCallBuilder>,
+    spawn_nicknames: &mut HashMap<String, String>,
 ) {
     let payload = if entry.entry_type == "response_item" {
         &entry.payload
@@ -1288,6 +1363,20 @@ fn handle_response_item(
                 .get("file_path")
                 .and_then(|v| v.as_str())
                 .filter(|s| !s.is_empty());
+            if let Some(metadata) = parse_spawn_agent_metadata(&output) {
+                spawn_nicknames.insert(call_id.clone(), metadata.nickname.clone());
+                if let Some(turn) = turns.get_mut(tid) {
+                    if let Some(spawn) = turn
+                        .collab_spawns
+                        .iter_mut()
+                        .find(|spawn| spawn.call_id == call_id)
+                    {
+                        if !metadata.nickname.is_empty() {
+                            spawn.agent_nickname = metadata.nickname;
+                        }
+                    }
+                }
+            }
             if let Some(spawn) = spawn_from_function_call_output(builder, &call_id, &output) {
                 if let Some(turn) = turns.get_mut(tid) {
                     turn.collab_spawns.push(spawn);
@@ -1958,6 +2047,32 @@ mod tests {
         );
         assert_eq!(turn.final_answer.as_deref(), Some("The parser is updated."));
         assert!(turn.agent_messages[0].order < turn.agent_messages[1].order);
+    }
+
+    #[test]
+    fn links_v2_subagent_activity_to_spawn_agent() {
+        let entries = entries(&[
+            r#"{"timestamp":"2026-09-02T03:18:22.194Z","type":"session_meta","payload":{"id":"parent-v2","timestamp":"2026-09-02T03:18:22.194Z","cli_version":"0.152.1"}}"#,
+            r#"{"timestamp":"2026-09-02T03:18:26.877Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+            r#"{"timestamp":"2026-09-02T03:18:26.900Z","type":"response_item","payload":{"type":"function_call","name":"spawn_agent","arguments":"{\"agent_type\":\"worker\",\"message\":\"Inspect the project\"}","call_id":"call_spawn_v2"}}"#,
+            r#"{"timestamp":"2026-09-02T03:18:26.910Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_spawn_v2","output":"{\"task_name\":\"/root/package_inspect\",\"nickname\":\"Helmholtz\"}"}}"#,
+            r#"{"timestamp":"2026-09-02T03:18:26.920Z","type":"event_msg","payload":{"type":"item_completed","turn_id":"turn-1","item":{"type":"SubAgentActivity","id":"call_spawn_v2","kind":"started","agent_thread_id":"worker-thread-v2","agent_path":"/root/package_inspect"}}}"#,
+            r#"{"timestamp":"2026-09-02T03:18:27.000Z","type":"event_msg","payload":{"type":"item_completed","turn_id":"turn-1","item":{"type":"SubAgentActivity","id":"call_spawn_v2","kind":"completed","agent_thread_id":"worker-thread-v2","agent_path":"/root/package_inspect"}}}"#,
+            r#"{"timestamp":"2026-09-02T03:18:28.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1"}}"#,
+        ]);
+
+        let turns = build_turns(&entries);
+        let turn = &turns[0];
+
+        assert_eq!(turn.collab_spawns.len(), 1);
+        let spawn = &turn.collab_spawns[0];
+        assert_eq!(spawn.call_id, "call_spawn_v2");
+        assert_eq!(spawn.new_session_id, "worker-thread-v2");
+        assert_eq!(spawn.agent_nickname, "Helmholtz");
+        assert_eq!(spawn.agent_role, "worker");
+        assert_eq!(turn.tool_calls.len(), 1);
+        assert_eq!(turn.tool_calls[0].kind, ToolKind::SpawnAgent);
+        assert_eq!(turn.tool_calls[0].status, "completed");
     }
 
     #[test]

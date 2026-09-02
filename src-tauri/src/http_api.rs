@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Json, Response};
 use axum::routing::{get, post};
@@ -107,6 +107,7 @@ async fn run_server(state: Arc<HttpState>) {
         .route("/api/frontend/update", post(api_update_frontend))
         .route("/api/sessions", post(api_discover_sessions))
         .route("/api/session/load", post(api_load_session))
+        .route("/api/session/download", get(api_download_session))
         .route("/api/session/status", post(api_session_status))
         .route("/api/session/watch", post(api_watch_session))
         .route("/api/session/unwatch", post(api_unwatch_session))
@@ -166,6 +167,81 @@ fn session_load_error_status(msg: &str) -> axum::http::StatusCode {
     } else {
         axum::http::StatusCode::INTERNAL_SERVER_ERROR
     }
+}
+
+fn percent_encode_filename(filename: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut encoded = String::with_capacity(filename.len());
+    for byte in filename.as_bytes() {
+        if (*byte).is_ascii_alphanumeric() || matches!(*byte, b'.' | b'-' | b'_') {
+            encoded.push(*byte as char);
+        } else {
+            encoded.push('%');
+            encoded.push(HEX[(byte >> 4) as usize] as char);
+            encoded.push(HEX[(byte & 0x0f) as usize] as char);
+        }
+    }
+    encoded
+}
+
+fn download_content_type(path: &Path) -> &'static str {
+    match path.extension().and_then(|extension| extension.to_str()) {
+        Some("jsonl") => "application/x-ndjson",
+        Some("zst") => "application/zstd",
+        _ => "application/octet-stream",
+    }
+}
+
+#[derive(Deserialize)]
+struct DownloadSessionQuery {
+    path: String,
+}
+
+async fn api_download_session(Query(query): Query<DownloadSessionQuery>) -> Response {
+    if query.path.is_empty() {
+        return err_response(
+            axum::http::StatusCode::BAD_REQUEST,
+            crate::commands::session::NO_SESSION_PATH_PROVIDED.to_string(),
+        );
+    }
+
+    let path = Path::new(&query.path);
+    let file = match tokio::fs::File::open(path).await {
+        Ok(file) => file,
+        Err(error) => {
+            return err_response(
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                error.to_string(),
+            )
+        }
+    };
+    let filename = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or("session.jsonl");
+    let disposition = format!(
+        "attachment; filename*=UTF-8''{}",
+        percent_encode_filename(filename)
+    );
+
+    Response::builder()
+        .status(axum::http::StatusCode::OK)
+        .header(
+            axum::http::header::CONTENT_TYPE,
+            download_content_type(path),
+        )
+        .header(axum::http::header::CONTENT_DISPOSITION, disposition)
+        .header(axum::http::header::CACHE_CONTROL, "no-store")
+        .body(axum::body::Body::from_stream(
+            tokio_util::io::ReaderStream::new(file),
+        ))
+        .unwrap_or_else(|error| {
+            err_response(
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                error.to_string(),
+            )
+        })
 }
 
 fn validate_frontend_html(html: &[u8]) -> Result<(), FrontendUpdateError> {
@@ -625,6 +701,46 @@ mod tests {
     fn frontend_client_rejects_invalid_proxy() {
         let result = build_frontend_http_client(Some("://missing-scheme"));
         assert!(matches!(result, Err(FrontendUpdateError::Configuration(_))));
+    }
+
+    #[test]
+    fn download_filename_is_percent_encoded_for_http_headers() {
+        assert_eq!(
+            percent_encode_filename("rollout 2026-09-02.jsonl"),
+            "rollout%202026-09-02.jsonl"
+        );
+        assert_eq!(
+            percent_encode_filename("会话.jsonl"),
+            "%E4%BC%9A%E8%AF%9D.jsonl"
+        );
+    }
+
+    #[tokio::test]
+    async fn session_download_returns_original_file_bytes_and_filename() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("rollout test.jsonl");
+        let content = br#"{"type":"session_meta"}
+"#;
+        tokio::fs::write(&path, content).await.unwrap();
+
+        let response = api_download_session(Query(DownloadSessionQuery {
+            path: path.to_string_lossy().into_owned(),
+        }))
+        .await;
+
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+        assert_eq!(
+            response.headers()[axum::http::header::CONTENT_TYPE],
+            "application/x-ndjson"
+        );
+        assert_eq!(
+            response.headers()[axum::http::header::CONTENT_DISPOSITION],
+            "attachment; filename*=UTF-8''rollout%20test.jsonl"
+        );
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(body.as_ref(), content);
     }
 
     #[tokio::test]

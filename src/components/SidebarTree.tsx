@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import type { CodexSessionInfo } from "../../shared/types";
 import { formatFileSize, timeAgo } from "../../shared/format";
 import { copyText } from "../lib/copyText";
+import { downloadSession } from "../lib/downloadSession";
 import { sessionDisplayName } from "../lib/sessionDisplay";
 import { isPrimarySession } from "../lib/sessionFilter";
 import { sessionRelativePath } from "../lib/sessionPath";
@@ -12,7 +13,7 @@ import {
 } from "../lib/sessionGrouping";
 import { OngoingDots } from "./OngoingDots";
 import { SubagentMarker } from "./SubagentMarker";
-import { VscCheck, VscCopy, VscFile } from "react-icons/vsc";
+import { VscCheck, VscCopy, VscDownload, VscFile, VscLoading } from "react-icons/vsc";
 
 const EMPTY_SESSION_IDS: ReadonlySet<string> = new Set();
 
@@ -27,6 +28,7 @@ interface SidebarTreeProps {
   onSelectSession: (info: CodexSessionInfo) => void;
   onToggleSessionSelection?: (info: CodexSessionInfo) => void;
   onToggleDate: (groupKey: string) => void;
+  onDownloadError?: (message: string) => void;
 }
 
 export function SidebarTree({
@@ -40,8 +42,12 @@ export function SidebarTree({
   onSelectSession,
   onToggleSessionSelection,
   onToggleDate,
+  onDownloadError,
 }: SidebarTreeProps) {
   const [copiedTarget, setCopiedTarget] = useState<string | null>(null);
+  const [downloadState, setDownloadState] = useState<
+    { path: string; status: "loading" | "success" | "error" } | undefined
+  >();
   const primarySessions = useMemo(() => sessions.filter(isPrimarySession), [sessions]);
   const grouped = useMemo(
     () => groupSessions(primarySessions, groupMode, sortOrder),
@@ -71,6 +77,38 @@ export function SidebarTree({
       setCopiedTarget(null);
     }
   }, []);
+
+  const handleDownload = useCallback(
+    async (session: CodexSessionInfo) => {
+      if (downloadState?.path === session.path && downloadState.status === "loading") return;
+
+      setDownloadState({ path: session.path, status: "loading" });
+      try {
+        await downloadSession(session.path);
+        setDownloadState({ path: session.path, status: "success" });
+        window.setTimeout(
+          () =>
+            setDownloadState((current) =>
+              current?.path === session.path && current.status === "success" ? undefined : current,
+            ),
+          1500,
+        );
+      } catch (error) {
+        setDownloadState({ path: session.path, status: "error" });
+        onDownloadError?.(
+          `Could not download session file: ${error instanceof Error ? error.message : "Unknown error"}`,
+        );
+        window.setTimeout(
+          () =>
+            setDownloadState((current) =>
+              current?.path === session.path && current.status === "error" ? undefined : current,
+            ),
+          2500,
+        );
+      }
+    },
+    [downloadState, onDownloadError],
+  );
 
   if (primarySessions.length === 0) {
     return (
@@ -106,6 +144,16 @@ export function SidebarTree({
                 const isSelected = s.path === selectedPath;
                 const isChecked = selectedSessionIds.has(s.id);
                 const displayName = sessionDisplayName(s);
+                const currentDownload =
+                  downloadState?.path === s.path ? downloadState.status : null;
+                const downloadLabel =
+                  currentDownload === "loading"
+                    ? "Downloading session file"
+                    : currentDownload === "success"
+                      ? "Downloaded session file"
+                      : currentDownload === "error"
+                        ? "Retry downloading session file"
+                        : "Download session file";
 
                 return (
                   <div
@@ -191,6 +239,26 @@ export function SidebarTree({
                             onKeyDown={(e) => e.stopPropagation()}
                           >
                             {copiedTarget === `${s.path}:path` ? <VscCheck /> : <VscFile />}
+                          </button>
+                          <button
+                            type="button"
+                            className={`sidebar-tree__copy-button${currentDownload === "success" ? " sidebar-tree__copy-button--copied" : ""}`}
+                            aria-label={downloadLabel}
+                            title={downloadLabel}
+                            disabled={currentDownload === "loading"}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleDownload(s);
+                            }}
+                            onKeyDown={(e) => e.stopPropagation()}
+                          >
+                            {currentDownload === "loading" ? (
+                              <VscLoading />
+                            ) : currentDownload === "success" ? (
+                              <VscCheck />
+                            ) : (
+                              <VscDownload />
+                            )}
                           </button>
                         </span>
                       )}

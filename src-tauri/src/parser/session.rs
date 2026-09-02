@@ -1382,6 +1382,57 @@ mod tests {
         assert_eq!(worker.id, "worker-v131");
     }
 
+    #[test]
+    fn v0152_parse_session_stitches_worker_via_subagent_activity() {
+        let tmp = tempdir().unwrap();
+        let parent_path = tmp
+            .path()
+            .join("rollout-2026-09-02T03-18-22-parent-v2.jsonl");
+        let worker_path = tmp
+            .path()
+            .join("rollout-2026-09-02T03-18-26-worker-thread-v2.jsonl");
+        std::fs::write(
+            &parent_path,
+            [
+                r#"{"timestamp":"2026-09-02T03:18:22Z","type":"session_meta","payload":{"id":"parent-v2","timestamp":"2026-09-02T03:18:22Z","cli_version":"0.152.1"}}"#,
+                r#"{"timestamp":"2026-09-02T03:18:26Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+                r#"{"timestamp":"2026-09-02T03:18:26Z","type":"response_item","payload":{"type":"function_call","name":"spawn_agent","arguments":"{\"agent_type\":\"worker\",\"message\":\"Inspect the project\"}","call_id":"call_spawn_v2"}}"#,
+                r#"{"timestamp":"2026-09-02T03:18:26Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_spawn_v2","output":"{\"task_name\":\"/root/package_inspect\",\"nickname\":\"Helmholtz\"}"}}"#,
+                r#"{"timestamp":"2026-09-02T03:18:26Z","type":"event_msg","payload":{"type":"item_completed","turn_id":"turn-1","item":{"type":"SubAgentActivity","id":"call_spawn_v2","kind":"started","agent_thread_id":"worker-thread-v2","agent_path":"/root/package_inspect"}}}"#,
+                r#"{"timestamp":"2026-09-02T03:18:28Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1"}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+        std::fs::write(
+            &worker_path,
+            [
+                r#"{"timestamp":"2026-09-02T03:18:27Z","type":"session_meta","payload":{"id":"worker-thread-v2","timestamp":"2026-09-02T03:18:27Z","cli_version":"0.152.1","cwd":"/tmp/worker"}}"#,
+                r#"{"timestamp":"2026-09-02T03:18:27Z","type":"event_msg","payload":{"type":"task_started","turn_id":"worker-turn"}}"#,
+                r#"{"timestamp":"2026-09-02T03:18:28Z","type":"event_msg","payload":{"type":"item_completed","turn_id":"worker-turn","item":{"type":"AgentMessage","id":"worker-message","content":[{"type":"Text","text":"Worker details"}],"phase":"final_answer"}}}"#,
+                r#"{"timestamp":"2026-09-02T03:18:29Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"worker-turn"}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let session = parse_session(&parent_path).unwrap();
+
+        assert_eq!(session.spawned_worker_ids, vec!["worker-thread-v2"]);
+        let spawn = &session.turns[0].collab_spawns[0];
+        assert_eq!(spawn.new_session_id, "worker-thread-v2");
+        assert_eq!(spawn.agent_nickname, "Helmholtz");
+        let worker = session.turns[0].tool_calls[0]
+            .worker_session
+            .as_ref()
+            .expect("v2 spawn_agent tool call should embed worker session");
+        assert_eq!(worker.id, "worker-thread-v2");
+        assert_eq!(
+            worker.turns[0].final_answer.as_deref(),
+            Some("Worker details")
+        );
+    }
+
     // Codex v0.134.0 (PRs #23883, #24051, #24055, #24059): --profile-v2 renamed to --profile;
     // legacy profile v1 support removed entirely.
     //
