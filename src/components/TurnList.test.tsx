@@ -151,6 +151,7 @@ describe("TurnList", () => {
     );
 
     expect(screen.getByLabelText("Uses 1 subagent")).toHaveAttribute("title", "Uses 1 subagent");
+    expect(document.querySelector(".turn-list__turn")).toHaveClass("turn-list__turn--subagent");
   });
 
   it("marks subagent activity when the worker count is unavailable", () => {
@@ -167,6 +168,13 @@ describe("TurnList", () => {
     );
 
     expect(screen.getByLabelText("Uses subagents")).toHaveAttribute("title", "Uses subagents");
+    expect(document.querySelector(".turn-list__turn")).toHaveClass("turn-list__turn--subagent");
+  });
+
+  it("does not mark a turn without subagent activity", () => {
+    render(<TurnList turns={[makeTurn()]} selectedIndex={-1} onSelectTurn={vi.fn()} />);
+
+    expect(document.querySelector(".turn-list__turn")).not.toHaveClass("turn-list__turn--subagent");
   });
 
   it("shows tool count for a single tool call", () => {

@@ -962,6 +962,11 @@ body {
   scroll-margin-top: 44px;
 }
 
+.turn-list__turn--subagent {
+  background: rgba(99, 179, 237, 0.16);
+  box-shadow: inset 3px 0 0 var(--icon-agents);
+}
+
 .message-list__empty {
   display: flex;
   align-items: center;

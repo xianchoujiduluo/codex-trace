@@ -124,6 +124,7 @@ export function TurnList({
         const usesSubagents = turn.tool_calls.some((tool) =>
           ["spawn_agent", "wait_agent", "interrupt_agent", "followup_task"].includes(tool.kind),
         );
+        const hasSubagents = subagentCount > 0 || usesSubagents;
         const userTs = turn.started_at
           ? formatExactTime(new Date(turn.started_at * 1000).toISOString())
           : null;
@@ -137,7 +138,7 @@ export function TurnList({
           <div
             key={turn.turn_id}
             ref={isSelected ? selectedRef : undefined}
-            className="turn-list__turn"
+            className={`turn-list__turn${hasSubagents ? " turn-list__turn--subagent" : ""}`}
             data-turn-index={i}
           >
             {/* User message */}
