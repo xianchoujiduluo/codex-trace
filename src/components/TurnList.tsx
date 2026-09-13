@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef, type CSSProperties } from "react";
 import type { CodexTurn, SessionPagination } from "../../shared/types";
 import { displayedTokenTotal, formatDuration, formatTokens } from "../../shared/format";
 import { formatExactTime } from "../lib/format";
@@ -10,7 +10,7 @@ import { tokenBreakdownTitle } from "./TokenBar";
 import { SubagentMarker } from "./SubagentMarker";
 import { ActivityTimeline } from "./ActivityTimeline";
 import { matchesTurn } from "../lib/turnSearch";
-
+import { minimapLayout } from "../lib/minimap";
 interface TurnListProps {
   turns: CodexTurn[];
   selectedIndex: number;
@@ -100,23 +100,57 @@ export function TurnList({
     () => visibleTurns.filter(({ turn }) => (turn.user_message ?? "").trim().length > 0),
     [visibleTurns],
   );
+  const hasMinimap = questionTurns.length > 0;
+
+  // The rail height drives the tick pitch so long sessions compress to fit
+  // instead of overflowing the viewport. Measured rather than assumed because
+  // the transcript area changes with the window and the sidebar width.
+  const minimapRef = useRef<HTMLElement>(null);
+  const [minimapHeight, setMinimapHeight] = useState(0);
+
+  useEffect(() => {
+    const el = minimapRef.current;
+    if (!el) return;
+    const measure = () => setMinimapHeight(el.clientHeight);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMinimap]);
+
+  const layout = minimapLayout(
+    questionTurns.length,
+    minimapHeight || undefined,
+    questionTurns.findIndex(({ index }) => index === selectedIndex),
+  );
+  const visibleTicks = layout.indices
+    .map((i) => questionTurns[i])
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
 
   return (
     <div className="chat-view">
-      {questionTurns.length > 0 && (
-        <nav className="turn-minimap" aria-label="Question quick navigation">
-          {questionTurns.map(({ turn, index: i }) => (
-            <button
-              key={turn.turn_id}
-              type="button"
-              className={`turn-minimap__tick${i === selectedIndex ? " turn-minimap__tick--active" : ""}`}
-              aria-label={`Jump to question: ${(turn.user_message ?? "").slice(0, 60)}`}
-              onClick={() => scrollToTurn(i)}
-            >
-              <span className="turn-minimap__bar" />
-              <span className="turn-minimap__tooltip">{turn.user_message}</span>
-            </button>
-          ))}
+      {hasMinimap && (
+        <nav
+          ref={minimapRef}
+          className="turn-minimap"
+          aria-label="Question quick navigation"
+          style={{ "--tick-pitch": `${layout.pitch}px` } as CSSProperties}
+        >
+          <div className="turn-minimap__list">
+            {visibleTicks.map(({ turn, index: i }) => (
+              <button
+                key={turn.turn_id}
+                type="button"
+                className={`turn-minimap__tick${i === selectedIndex ? " turn-minimap__tick--active" : ""}`}
+                aria-label={`Jump to question: ${(turn.user_message ?? "").slice(0, 60)}`}
+                onClick={() => scrollToTurn(i)}
+              >
+                <span className="turn-minimap__bar" />
+                <span className="turn-minimap__tooltip">{turn.user_message}</span>
+              </button>
+            ))}
+          </div>
         </nav>
       )}
       <div ref={listRef} className="message-list">

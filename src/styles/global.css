@@ -959,15 +959,27 @@ body {
   min-height: 0;
 }
 
+/* Ticks form a compact, evenly spaced block centred in the rail rather than
+   stretched over the full viewport height (a few questions used to fan out into
+   a tall sparse column). `--tick-pitch` comes from `minimapLayout()` so
+   many-question sessions tighten (and are sampled) instead of overflowing. */
 .turn-minimap {
   display: flex;
   flex-direction: column;
-  justify-content: space-evenly;
-  align-items: stretch;
+  align-items: center;
   flex-shrink: 0;
   width: 26px;
   padding: 10px 0;
-  border-right: 1px solid var(--border);
+}
+
+/* Centred with `margin: auto 0` rather than `justify-content: center`, because
+   auto margins degrade to 0 once the block overflows — with
+   `justify-content: center` the topmost ticks would be unreachable. */
+.turn-minimap__list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: auto 0;
 }
 
 .turn-minimap__tick {
@@ -976,7 +988,7 @@ body {
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 16px;
+  height: var(--tick-pitch, 10px);
   padding: 0;
   background: none;
   border: 0;
@@ -985,30 +997,21 @@ body {
 
 .turn-minimap__bar {
   display: block;
-  width: 10px;
+  width: 12px;
   height: 2px;
   border-radius: 1px;
   background: var(--text-muted);
-  opacity: 0.55;
-  transition:
-    width 0.12s,
-    background 0.12s,
-    opacity 0.12s;
+  transition: background 0.12s;
 }
 
 .turn-minimap__tick:hover .turn-minimap__bar,
 .turn-minimap__tick:focus-visible .turn-minimap__bar {
-  width: 16px;
   background: var(--text-secondary);
-  opacity: 1;
 }
 
 .turn-minimap__tick--active .turn-minimap__bar,
 .turn-minimap__tick--active:hover .turn-minimap__bar {
-  width: 18px;
-  height: 3px;
-  background: var(--accent);
-  opacity: 1;
+  background: var(--text-bright);
 }
 
 .turn-minimap__tooltip {

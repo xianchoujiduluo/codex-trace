@@ -8,6 +8,7 @@ import type {
   TokenUsage,
 } from "../../shared/types";
 import { TurnList } from "./TurnList";
+import { MAX_TICK_PITCH, minimapLayout } from "../lib/minimap";
 
 const TOKEN_INFO: TokenInfo = {
   input_tokens: 100,
@@ -417,5 +418,97 @@ describe("TurnList chat layout", () => {
     const userBubble = container.querySelector(".message--user");
     expect(userBubble).toBeInTheDocument();
     expect(userBubble).toHaveClass("message");
+  });
+
+  it("groups the minimap ticks in a compact list wrapper", () => {
+    const { container } = render(
+      <TurnList
+        turns={[
+          makeTurn({ turn_id: "t1", user_message: "First question" }),
+          makeTurn({ turn_id: "t2", user_message: "Second question" }),
+        ]}
+        selectedIndex={-1}
+        onSelectTurn={vi.fn()}
+      />,
+    );
+
+    const list = container.querySelector(".turn-minimap__list");
+    expect(list).toBeInTheDocument();
+    expect(list?.querySelectorAll(".turn-minimap__tick")).toHaveLength(2);
+  });
+
+  it("drives the tick pitch from the tick count so few questions stay compact", () => {
+    const two = render(
+      <TurnList
+        turns={[
+          makeTurn({ turn_id: "t1", user_message: "Q1" }),
+          makeTurn({ turn_id: "t2", user_message: "Q2" }),
+        ]}
+        selectedIndex={-1}
+        onSelectTurn={vi.fn()}
+      />,
+    );
+    const smallPitch = two.container
+      .querySelector<HTMLElement>(".turn-minimap")
+      ?.style.getPropertyValue("--tick-pitch");
+    expect(smallPitch).toBe(`${MAX_TICK_PITCH}px`);
+
+    two.unmount();
+
+    const many = render(
+      <TurnList
+        turns={Array.from({ length: 60 }, (_, i) =>
+          makeTurn({ turn_id: `t${i}`, user_message: `Question ${i}` }),
+        )}
+        selectedIndex={-1}
+        onSelectTurn={vi.fn()}
+      />,
+    );
+    const densePitch = many.container
+      .querySelector<HTMLElement>(".turn-minimap")
+      ?.style.getPropertyValue("--tick-pitch");
+    expect(parseFloat(densePitch!)).toBeLessThan(MAX_TICK_PITCH);
+  });
+
+  it("samples ticks on very long sessions instead of merging them into a bar", () => {
+    // More questions than the rail can render at MIN_TICK_PITCH, so the rail
+    // must sample rather than collapse the bars into a solid strip.
+    const count = 200;
+    const { container } = render(
+      <TurnList
+        turns={Array.from({ length: count }, (_, i) =>
+          makeTurn({ turn_id: `t${i}`, user_message: `Question ${i}` }),
+        )}
+        selectedIndex={-1}
+        onSelectTurn={vi.fn()}
+      />,
+    );
+
+    const ticks = container.querySelectorAll(".turn-minimap__tick");
+    expect(ticks.length).toBeGreaterThan(10);
+    expect(ticks.length).toBeLessThan(count);
+  });
+
+  it("keeps the active question tick rendered on very long sessions", () => {
+    const count = 200;
+    // An index the even sampling skips, so it must be added explicitly.
+    const active = 77;
+    const turns = Array.from({ length: count }, (_, i) =>
+      makeTurn({ turn_id: `t${i}`, user_message: `Question ${i}` }),
+    );
+    const { container } = render(
+      <TurnList turns={turns} selectedIndex={active} onSelectTurn={vi.fn()} />,
+    );
+
+    // Guard the premise: this index really is skipped by plain sampling.
+    const sampled = minimapLayout(count).indices;
+    expect(sampled).not.toContain(active);
+
+    const activeTicks = container.querySelectorAll(".turn-minimap__tick--active");
+    expect(activeTicks).toHaveLength(1);
+    expect(activeTicks[0]).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining(`Question ${active}`),
+    );
   });
 });
