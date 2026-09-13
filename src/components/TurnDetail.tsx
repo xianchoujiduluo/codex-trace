@@ -268,6 +268,9 @@ export function TurnDetail({
                   </summary>
                   {reasoning.map((message, i) =>
                     message.text.trim() ? (
+                      // Reasoning entries can repeat verbatim (degenerate model loops), so
+                      // content keys would collide; fall back to position for identity.
+                      // oxlint-disable-next-line react/no-array-index-key
                       <pre key={`reasoning-${i}`} className="turn-detail__reasoning-entry">
                         {message.text}
                       </pre>

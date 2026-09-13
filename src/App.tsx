@@ -25,7 +25,7 @@ import {
   type SessionGroupMode,
   type SessionSortOrder,
 } from "./lib/sessionGrouping";
-import { isPrimarySession, type ProviderFilter } from "./lib/sessionFilter";
+import { isPrimarySession, providerLabel, type ProviderFilter } from "./lib/sessionFilter";
 import { copyText } from "./lib/copyText";
 import { matchesTurn } from "./lib/turnSearch";
 
@@ -526,6 +526,9 @@ export function App() {
               onLoadMore={handleLoadMore}
               searchQuery={listSearchQuery}
               onSelectTurn={handleOpenDetail}
+              providerName={
+                session.session ? providerLabel(session.session.provider ?? "codex") : "Codex"
+              }
             />
           )}
 

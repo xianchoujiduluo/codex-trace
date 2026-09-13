@@ -107,7 +107,8 @@ describe("TurnList", () => {
 
   it("renders the user message text", () => {
     render(<TurnList turns={[makeTurn()]} selectedIndex={-1} onSelectTurn={vi.fn()} />);
-    expect(screen.getByText("Hello Codex")).toBeInTheDocument();
+    // The question text appears in the bubble and in the minimap tooltip.
+    expect(screen.getAllByText("Hello Codex").length).toBeGreaterThanOrEqual(1);
   });
 
   it("renders the agent final answer as preview", () => {
@@ -116,10 +117,12 @@ describe("TurnList", () => {
   });
 
   it("shows user messages expanded and Codex messages collapsed by default", () => {
-    render(<TurnList turns={[makeTurn()]} selectedIndex={-1} onSelectTurn={vi.fn()} />);
+    const { container } = render(
+      <TurnList turns={[makeTurn()]} selectedIndex={-1} onSelectTurn={vi.fn()} />,
+    );
 
-    const userMessage = screen.getByText("Hello Codex");
-    const codexMessage = screen.getByText("Hi there!");
+    const userMessage = container.querySelector(".message--user .message__content")!;
+    const codexMessage = container.querySelector(".message--claude .message__content")!;
     expect(userMessage).not.toHaveClass("message__content--collapsed");
     expect(codexMessage).toHaveClass("message__content--collapsed");
 
@@ -296,7 +299,7 @@ describe("TurnList", () => {
       />,
     );
 
-    expect(screen.getByText("Find this request")).toBeInTheDocument();
+    expect(screen.getAllByText("Find this request").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText("Different request")).not.toBeInTheDocument();
   });
 
@@ -334,5 +337,84 @@ describe("TurnList", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Load older turns/ }));
     expect(onLoadMore).toHaveBeenCalledOnce();
+  });
+});
+
+describe("TurnList chat layout", () => {
+  it("renders one minimap tick per question with the question as tooltip", () => {
+    render(
+      <TurnList
+        turns={[
+          makeTurn({ turn_id: "t1", user_message: "First question" }),
+          makeTurn({ turn_id: "t2", user_message: "Second question" }),
+        ]}
+        selectedIndex={-1}
+        onSelectTurn={vi.fn()}
+      />,
+    );
+
+    const ticks = screen.getAllByRole("button", { name: /Jump to question/ });
+    expect(ticks).toHaveLength(2);
+    // Each question text appears in both the bubble and the minimap tooltip.
+    expect(screen.getAllByText("First question").length).toBe(2);
+    expect(screen.getAllByText("Second question").length).toBe(2);
+  });
+
+  it("marks the active question tick", () => {
+    render(
+      <TurnList
+        turns={[
+          makeTurn({ turn_id: "t1", user_message: "First question" }),
+          makeTurn({ turn_id: "t2", user_message: "Second question" }),
+        ]}
+        selectedIndex={1}
+        onSelectTurn={vi.fn()}
+      />,
+    );
+
+    const ticks = screen.getAllByRole("button", { name: /Jump to question/ });
+    expect(ticks[0]).not.toHaveClass("turn-minimap__tick--active");
+    expect(ticks[1]).toHaveClass("turn-minimap__tick--active");
+  });
+
+  it("scrolls to the turn when its minimap tick is clicked", () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    render(
+      <TurnList
+        turns={[
+          makeTurn({ turn_id: "t1", user_message: "First question" }),
+          makeTurn({ turn_id: "t2", user_message: "Second question" }),
+        ]}
+        selectedIndex={-1}
+        onSelectTurn={vi.fn()}
+      />,
+    );
+
+    const ticks = screen.getAllByRole("button", { name: /Second question/ });
+    fireEvent.click(ticks[0]);
+
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+  });
+
+  it("labels assistant messages with the session provider", () => {
+    const { container, rerender } = render(
+      <TurnList turns={[makeTurn()]} selectedIndex={-1} onSelectTurn={vi.fn()} />,
+    );
+    expect(container.querySelector(".message__role--claude")?.textContent).toBe("Codex");
+
+    rerender(
+      <TurnList turns={[makeTurn()]} selectedIndex={-1} onSelectTurn={vi.fn()} providerName="pi" />,
+    );
+    expect(container.querySelector(".message__role--claude")?.textContent).toBe("pi");
+  });
+
+  it("keeps the user message in a right-aligned bubble container", () => {
+    const { container } = render(
+      <TurnList turns={[makeTurn()]} selectedIndex={-1} onSelectTurn={vi.fn()} />,
+    );
+    const userBubble = container.querySelector(".message--user");
+    expect(userBubble).toBeInTheDocument();
+    expect(userBubble).toHaveClass("message");
   });
 });
