@@ -4,6 +4,22 @@ All notable changes to codex-trace are documented here. Versions follow
 [semantic versioning](https://semver.org/), and this file follows
 [Keep a Changelog](https://keepachangelog.com/) conventions.
 
+## [0.4.16] — 2026-09-13
+
+### Added
+
+- **Multi-provider session support: Claude Code and pi**. Browse Claude Code (`~/.claude/projects`)
+  and pi (`~/.pi/agent/sessions`) session logs alongside Codex in the same interface. The session
+  sidebar gains a provider filter (shown only when multiple agents are detected) and per-session
+  agent badges; sessions from every agent render through the shared turn and tool-call model.
+- **Provider abstraction layer**. A new provider layer detects each agent's log location from the
+  filesystem path and dispatches parsing accordingly. Chat-style JSONL transcripts (Claude Code,
+  pi) are normalised through a dedicated parser with tool-call pairing, token accounting, and
+  byte-offset incremental refresh, so live tailing works for those sessions too. Codex parsing is
+  unchanged.
+
+[0.4.16]: https://github.com/xianchoujiduluo/codex-trace/releases/tag/v0.4.16
+
 ## [0.4.15] — 2026-09-02
 
 ### Added
