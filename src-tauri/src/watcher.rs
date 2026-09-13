@@ -229,6 +229,10 @@ async fn reconcile_picker_activity(
 /// Start watching the sessions directory for new/changed files.
 /// Filesystem notifications provide low-latency updates; a five-second metadata-only
 /// reconciliation pass repairs missed events without rereading unchanged transcripts.
+///
+/// `sessions_dir` names the Codex root (possibly overridden by settings); the
+/// Claude Code and pi standard locations are watched alongside it so their
+/// sessions get the same live-activity treatment.
 pub fn start_picker_watcher(
     sessions_dir: String,
     state: Arc<AppState>,
@@ -241,6 +245,8 @@ pub fn start_picker_watcher(
     let signal_tx_clone = signal_tx.clone();
     let sessions_dir_thread = sessions_dir.clone();
     let sessions_dir_async = sessions_dir.clone();
+    let chat_roots: Vec<(crate::parser::provider::Provider, std::path::PathBuf)> =
+        state.chat_roots().to_vec();
 
     std::thread::spawn(move || {
         let (tx, rx) = std::sync::mpsc::channel();
@@ -249,9 +255,12 @@ pub fn start_picker_watcher(
             Err(_) => return,
         };
 
-        let dir = std::path::Path::new(&sessions_dir_thread);
-        if dir.exists() {
-            let _ = watcher.watch(dir, RecursiveMode::Recursive);
+        for (_, root) in
+            crate::parser::provider::session_roots(Some(&sessions_dir_thread), &chat_roots)
+        {
+            if root.exists() {
+                let _ = watcher.watch(&root, RecursiveMode::Recursive);
+            }
         }
 
         run_debounce_loop(

@@ -5,6 +5,7 @@ import { usePicker, resolveSessionsDir } from "./hooks/usePicker";
 import { useToggleSet } from "./hooks/useToggleSet";
 import { useKeyboard } from "./hooks/useKeyboard";
 import { SidebarTree } from "./components/SidebarTree";
+import { ProviderFilterBar } from "./components/ProviderFilterBar";
 import { SessionPicker } from "./components/SessionPicker";
 import { TurnList } from "./components/TurnList";
 import { TurnDetail } from "./components/TurnDetail";
@@ -24,7 +25,7 @@ import {
   type SessionGroupMode,
   type SessionSortOrder,
 } from "./lib/sessionGrouping";
-import { isPrimarySession } from "./lib/sessionFilter";
+import { isPrimarySession, type ProviderFilter } from "./lib/sessionFilter";
 import { copyText } from "./lib/copyText";
 import { matchesTurn } from "./lib/turnSearch";
 
@@ -58,6 +59,7 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [sessionGroupMode, setSessionGroupMode] = useState<SessionGroupMode>("directory");
   const [sidebarSortOrder, setSidebarSortOrder] = useState<SessionSortOrder>("newest");
+  const [providerFilter, setProviderFilter] = useState<ProviderFilter>("all");
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [sidebarSelectionMode, setSidebarSelectionMode] = useState(false);
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set());
@@ -431,6 +433,7 @@ export function App() {
           <div className="app__sidebar-header">
             <span className="app__sidebar-title">SESSIONS</span>
             <div className="app__sidebar-actions">
+              {" "}
               {!sidebarCollapsed && sessionGroupMode === "directory" && (
                 <SidebarDirectoryActions
                   sortOrder={sidebarSortOrder}
@@ -457,6 +460,13 @@ export function App() {
             </div>
           </div>
           {!sidebarCollapsed && (
+            <ProviderFilterBar
+              sessions={picker.allSessions}
+              filter={providerFilter}
+              onChange={setProviderFilter}
+            />
+          )}
+          {!sidebarCollapsed && (
             <SidebarTree
               sessions={picker.allSessions}
               selectedPath={session.sessionPath || null}
@@ -465,6 +475,7 @@ export function App() {
               selectionMode={sidebarSelectionMode}
               selectedSessionIds={selectedSessionIds}
               collapsedDates={collapsedGroups}
+              providerFilter={providerFilter}
               onSelectSession={handleSelectSession}
               onToggleSessionSelection={handleToggleSessionSelection}
               onToggleDate={handleToggleGroup}

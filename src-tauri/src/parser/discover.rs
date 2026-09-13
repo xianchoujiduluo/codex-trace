@@ -64,10 +64,17 @@ pub struct CodexSessionInfo {
     pub last_activity_time: String,
     /// Size of the rollout file on disk, in bytes.
     pub file_size_bytes: u64,
+    /// The agent this session belongs to: "codex" | "claude" | "pi".
+    #[serde(default = "default_provider_id")]
+    pub provider: String,
     /// Internal activity-parser state. This is derived during discovery and is not part of the
     /// frontend API; it lets the global watcher continue parsing from the current file offset.
     #[serde(skip)]
     pub(crate) has_session_end: bool,
+}
+
+fn default_provider_id() -> String {
+    "codex".to_string()
 }
 
 /// Scan a sessions directory recursively for all rollout-*.jsonl files.
@@ -651,6 +658,7 @@ pub(crate) fn scan_session_file(path: &Path) -> Option<CodexSessionInfo> {
         history_base_thread_id,
         last_activity_time,
         file_size_bytes,
+        provider: "codex".to_string(),
         has_session_end,
     })
 }

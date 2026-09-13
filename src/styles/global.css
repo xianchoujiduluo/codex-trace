@@ -4106,3 +4106,45 @@ body {
   font-size: 11px;
   color: var(--text-secondary);
 }
+
+/* Provider (agent) filter chips in the session sidebar. */
+.provider-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.provider-filter__chip {
+  height: 20px;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.provider-filter__chip:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.provider-filter__chip--active,
+.provider-filter__chip--active:hover {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.sidebar-tree__provider-badge {
+  flex-shrink: 0;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 9px;
+  line-height: 13px;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  white-space: nowrap;
+}

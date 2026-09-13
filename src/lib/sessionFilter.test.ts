@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { CodexSessionInfo } from "../../shared/types";
 import {
   filterSessions,
+  filterSessionsByProvider,
   isPrimarySession,
+  presentProviders,
+  providerLabel,
   RECENT_SESSION_LIMIT,
   sessionActivityDateGroup,
+  sessionProvider,
 } from "./sessionFilter";
 
 function makeSession(
@@ -137,5 +141,61 @@ describe("isPrimarySession", () => {
         is_inline_worker: true,
       }),
     ).toBe(false);
+  });
+});
+
+describe("sessionProvider", () => {
+  it("reads the provider field and defaults to codex", () => {
+    expect(sessionProvider({ ...makeSession("s1", "2026-08-20T12:00:00Z"), provider: "pi" })).toBe(
+      "pi",
+    );
+    // Sessions from older backends carry no provider field.
+    expect(sessionProvider(makeSession("s2", "2026-08-20T12:00:00Z"))).toBe("codex");
+  });
+});
+
+describe("filterSessionsByProvider", () => {
+  it("keeps every session for the all filter", () => {
+    const sessions = [
+      { ...makeSession("a", "2026-08-20T12:00:00Z"), provider: "codex" },
+      { ...makeSession("b", "2026-08-21T12:00:00Z"), provider: "claude" },
+    ];
+    expect(filterSessionsByProvider(sessions, "all")).toHaveLength(2);
+  });
+
+  it("filters by provider and treats missing provider as codex", () => {
+    const sessions = [
+      { ...makeSession("a", "2026-08-20T12:00:00Z"), provider: "codex" },
+      { ...makeSession("b", "2026-08-21T12:00:00Z"), provider: "claude" },
+      makeSession("c", "2026-08-22T12:00:00Z"),
+      { ...makeSession("d", "2026-08-23T12:00:00Z"), provider: "pi" },
+    ];
+    expect(filterSessionsByProvider(sessions, "claude").map((s) => s.id)).toEqual(["b"]);
+    expect(filterSessionsByProvider(sessions, "pi").map((s) => s.id)).toEqual(["d"]);
+    expect(filterSessionsByProvider(sessions, "codex").map((s) => s.id)).toEqual(["a", "c"]);
+  });
+});
+
+describe("presentProviders", () => {
+  it("lists only providers with sessions in display order", () => {
+    const sessions = [
+      { ...makeSession("a", "2026-08-20T12:00:00Z"), provider: "pi" },
+      { ...makeSession("b", "2026-08-21T12:00:00Z"), provider: "codex" },
+      { ...makeSession("c", "2026-08-22T12:00:00Z"), provider: "claude" },
+    ];
+    expect(presentProviders(sessions)).toEqual(["codex", "claude", "pi"]);
+  });
+
+  it("hides providers without sessions", () => {
+    const sessions = [{ ...makeSession("a", "2026-08-20T12:00:00Z"), provider: "codex" }];
+    expect(presentProviders(sessions)).toEqual(["codex"]);
+  });
+});
+
+describe("providerLabel", () => {
+  it("renders human-readable names", () => {
+    expect(providerLabel("claude")).toBe("Claude");
+    expect(providerLabel("pi")).toBe("pi");
+    expect(providerLabel("codex")).toBe("Codex");
   });
 });

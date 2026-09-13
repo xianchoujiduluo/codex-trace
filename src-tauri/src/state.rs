@@ -3,11 +3,11 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::broadcast;
 
-use crate::parser::activity::{collect_session_paths, ActivityTracker};
+use crate::parser::activity::ActivityTracker;
 use crate::parser::discover::CodexSessionInfo;
+use crate::parser::provider;
 use crate::parser::session::{
-    page_session, CodexSession, IncrementalSession, SessionPageDirection, SessionRefresh,
-    SessionStatus,
+    page_session, CodexSession, SessionHandle, SessionPageDirection, SessionRefresh, SessionStatus,
 };
 use crate::settings::Settings;
 use crate::watcher::WatcherHandle;
@@ -53,14 +53,22 @@ pub struct AppState {
     pub settings: Mutex<Settings>,
     pub watched_session_ongoing: Mutex<Option<(String, bool)>>,
     pub event_tx: broadcast::Sender<SseEvent>,
+    /// Chat-provider log roots (Claude Code, pi) scanned alongside the Codex
+    /// sessions dir. Injectable so tests can isolate discovery from the
+    /// machine's real agent homes.
+    chat_roots: Vec<(provider::Provider, std::path::PathBuf)>,
     sessions_cache: Mutex<Option<SessionsCache>>,
-    parsed_sessions: Mutex<HashMap<String, Arc<Mutex<IncrementalSession>>>>,
+    parsed_sessions: Mutex<HashMap<String, Arc<Mutex<SessionHandle>>>>,
     activity_trackers: Mutex<HashMap<String, ActivityTracker>>,
     session_index_fingerprints: Mutex<HashMap<String, SessionIndexFingerprint>>,
 }
 
 impl AppState {
     pub fn new() -> Self {
+        Self::with_chat_roots(provider::default_chat_roots())
+    }
+
+    pub fn with_chat_roots(chat_roots: Vec<(provider::Provider, std::path::PathBuf)>) -> Self {
         let (event_tx, _) = broadcast::channel(64);
         Self {
             session_watcher: Mutex::new(None),
@@ -68,6 +76,7 @@ impl AppState {
             settings: Mutex::new(crate::settings::load_settings()),
             watched_session_ongoing: Mutex::new(None),
             event_tx,
+            chat_roots,
             sessions_cache: Mutex::new(None),
             parsed_sessions: Mutex::new(HashMap::new()),
             activity_trackers: Mutex::new(HashMap::new()),
@@ -75,7 +84,12 @@ impl AppState {
         }
     }
 
-    fn parsed_session(&self, path: &str) -> Result<Arc<Mutex<IncrementalSession>>, String> {
+    /// The chat roots this state scans, exposed for the picker watcher.
+    pub fn chat_roots(&self) -> &[(provider::Provider, std::path::PathBuf)] {
+        &self.chat_roots
+    }
+
+    fn parsed_session(&self, path: &str) -> Result<Arc<Mutex<SessionHandle>>, String> {
         if path.is_empty() {
             return Err(crate::commands::session::NO_SESSION_PATH_PROVIDED.to_string());
         }
@@ -87,9 +101,7 @@ impl AppState {
             }
         }
 
-        let parsed = Arc::new(Mutex::new(IncrementalSession::load(std::path::Path::new(
-            path,
-        ))?));
+        let parsed = Arc::new(Mutex::new(SessionHandle::load(std::path::Path::new(path))?));
         let mut cache = self.parsed_sessions.lock().map_err(|e| e.to_string())?;
         if let Some(entry) = cache.get(path) {
             return Ok(entry.clone());
@@ -256,7 +268,12 @@ impl AppState {
         &self,
         sessions_dir: &str,
     ) -> Result<ActivityReconciliation, String> {
-        let paths = collect_session_paths(std::path::Path::new(sessions_dir));
+        // Reconcile every provider root: the codex sessions dir (possibly
+        // overridden) plus the configured chat roots (Claude Code, pi).
+        let paths = provider::collect_all_session_paths(Some(sessions_dir), &self.chat_roots);
+        let roots = provider::session_roots(Some(sessions_dir), &self.chat_roots);
+        let under_any_root =
+            |path: &std::path::Path| roots.iter().any(|(_, root)| path.starts_with(root));
         let mut trackers = self.activity_trackers.lock().map_err(|e| e.to_string())?;
         let mut result = ActivityReconciliation::default();
 
@@ -307,10 +324,7 @@ impl AppState {
         let removed: Vec<String> = trackers
             .iter()
             .filter(|(_, tracker)| {
-                tracker
-                    .path()
-                    .starts_with(std::path::Path::new(sessions_dir))
-                    && !paths.contains(tracker.path())
+                under_any_root(tracker.path()) && !paths.contains(tracker.path())
             })
             .map(|(path, _)| path.clone())
             .collect();
@@ -363,6 +377,9 @@ impl AppState {
 
     /// Discover sessions for `dir`, returning a cached result if fresh enough.
     /// Multiple concurrent callers within the TTL window share one disk scan.
+    ///
+    /// `dir` overrides the Codex sessions root; chat-provider (Claude Code, pi)
+    /// sessions are merged in from the configured chat roots.
     pub fn discover_sessions_cached(&self, dir: &str) -> Result<Vec<CodexSessionInfo>, String> {
         let mut cache = self.sessions_cache.lock().map_err(|e| e.to_string())?;
         if let Some(ref c) = *cache {
@@ -370,8 +387,7 @@ impl AppState {
                 return Ok(c.sessions.clone());
             }
         }
-        let path = std::path::Path::new(dir);
-        let sessions = crate::parser::discover::discover_sessions(path)?;
+        let sessions = provider::discover_all(Some(dir), &self.chat_roots);
         self.seed_session_activity(&sessions);
         if let Ok(mut fingerprints) = self.session_index_fingerprints.lock() {
             fingerprints.insert(dir.to_string(), session_index_fingerprint(dir));
@@ -406,7 +422,9 @@ mod tests {
     use std::io::Write;
 
     fn make_state() -> AppState {
-        AppState::new()
+        // No chat roots: keeps discovery scoped to the codex dir under test,
+        // independent of the real ~/.claude / ~/.pi on this machine.
+        AppState::with_chat_roots(Vec::new())
     }
 
     #[test]
@@ -438,6 +456,7 @@ mod tests {
                     id: "cached-session".to_string(),
                     path: "/fake/path.jsonl".to_string(),
                     cwd: None,
+                    provider: "codex".to_string(),
                     git_branch: None,
                     originator: None,
                     model: None,
@@ -489,6 +508,7 @@ mod tests {
                     id: "dir-a-session".to_string(),
                     path: "/fake/a.jsonl".to_string(),
                     cwd: None,
+                    provider: "codex".to_string(),
                     git_branch: None,
                     originator: None,
                     model: None,

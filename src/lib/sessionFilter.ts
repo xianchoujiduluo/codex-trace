@@ -62,3 +62,34 @@ export function filterSessions(
 
   return sorted;
 }
+
+/** Provider ids that can appear on session rows. */
+export type ProviderFilter = "all" | "codex" | "claude" | "pi";
+
+/** Human-readable label for a provider id. */
+export function providerLabel(provider: string): string {
+  if (provider === "claude") return "Claude";
+  if (provider === "pi") return "pi";
+  return "Codex";
+}
+
+/** The provider backing a session; sessions from older backends are codex. */
+export function sessionProvider(session: CodexSessionInfo): string {
+  return session.provider ?? "codex";
+}
+
+/** Keep only sessions of the selected provider ("all" keeps everything). */
+export function filterSessionsByProvider(
+  sessions: CodexSessionInfo[],
+  filter: ProviderFilter,
+): CodexSessionInfo[] {
+  if (filter === "all") return sessions;
+  return sessions.filter((session) => sessionProvider(session) === filter);
+}
+
+/** Provider ids present in the session list, in stable display order. */
+export function presentProviders(sessions: CodexSessionInfo[]): ProviderFilter[] {
+  const present = new Set(sessions.map(sessionProvider));
+  const order: ProviderFilter[] = ["codex", "claude", "pi"];
+  return order.filter((provider) => present.has(provider));
+}

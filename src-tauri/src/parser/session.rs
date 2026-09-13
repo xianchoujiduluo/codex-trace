@@ -50,9 +50,16 @@ pub struct CodexSession {
     /// marks the whole rollout file as a continuation of another paginated thread's history.
     /// Null for legacy-history sessions or paginated threads with no inherited prefix.
     pub history_base_thread_id: Option<String>,
+    /// The agent this session belongs to: "codex" | "claude" | "pi".
+    #[serde(default = "default_provider_id")]
+    pub provider: String,
     /// Present when this response contains only one page of turns from a large session.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pagination: Option<SessionPagination>,
+}
+
+fn default_provider_id() -> String {
+    "codex".to_string()
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -98,6 +105,7 @@ pub struct SessionPatch {
     pub source_size_bytes: u64,
 }
 
+#[derive(Debug)]
 pub enum SessionRefresh {
     Unchanged,
     Full {
@@ -108,9 +116,18 @@ pub enum SessionRefresh {
 }
 
 /// Parse a Codex JSONL session file into a CodexSession.
+///
+/// Provider-aware: files under `~/.claude/projects` or `~/.pi/agent/sessions`
+/// are dispatched to the chat-style parser and normalised into the same
+/// CodexSession model; everything else takes the native Codex path.
 pub fn parse_session(path: &Path) -> Result<CodexSession, String> {
-    let mut visited = HashSet::new();
-    parse_session_inner(path, &mut visited)
+    match super::provider::Provider::detect_from_path(path) {
+        super::provider::Provider::Codex => {
+            let mut visited = HashSet::new();
+            parse_session_inner(path, &mut visited)
+        }
+        provider => super::chat::parse_chat_session(path, provider),
+    }
 }
 
 fn parse_session_inner(
@@ -220,6 +237,7 @@ fn build_session_metadata(path: &Path, entries: &[RawEntry]) -> CodexSession {
         is_headless: false,
         has_missing_spawn_metadata: false,
         history_base_thread_id: None,
+        provider: "codex".to_string(),
         pagination: None,
     };
 
@@ -588,6 +606,61 @@ impl IncrementalSession {
             has_missing_spawn_metadata,
             source_size_bytes: self.source_size_bytes,
         }))
+    }
+}
+
+/// Provider-dispatching handle over a cached session parser. Exposes the same
+/// surface the orchestrator needs for both the native Codex incremental parser
+/// and the chat-style (Claude Code / pi) one.
+pub enum SessionHandle {
+    Codex(IncrementalSession),
+    Chat(super::chat::ChatIncremental),
+}
+
+impl SessionHandle {
+    pub fn load(path: &Path) -> Result<Self, String> {
+        match super::provider::Provider::detect_from_path(path) {
+            super::provider::Provider::Codex => IncrementalSession::load(path).map(Self::Codex),
+            provider => super::chat::ChatIncremental::load(path, provider).map(Self::Chat),
+        }
+    }
+
+    pub fn session(&self) -> &CodexSession {
+        match self {
+            Self::Codex(inner) => inner.session(),
+            Self::Chat(inner) => inner.session(),
+        }
+    }
+
+    pub fn source_size_bytes(&self) -> u64 {
+        match self {
+            Self::Codex(inner) => inner.source_size_bytes(),
+            Self::Chat(inner) => inner.source_size_bytes(),
+        }
+    }
+
+    pub fn status_snapshot(&self) -> SessionStatus {
+        match self {
+            Self::Codex(inner) => inner.status_snapshot(),
+            Self::Chat(inner) => inner.status_snapshot(),
+        }
+    }
+
+    pub fn status_reconciliation(
+        &mut self,
+        known_source_size_bytes: Option<u64>,
+    ) -> Result<SessionStatus, String> {
+        match self {
+            Self::Codex(inner) => inner.status_reconciliation(known_source_size_bytes),
+            Self::Chat(inner) => inner.status_reconciliation(known_source_size_bytes),
+        }
+    }
+
+    pub fn refresh(&mut self) -> Result<SessionRefresh, String> {
+        match self {
+            Self::Codex(inner) => inner.refresh(),
+            Self::Chat(inner) => inner.refresh(),
+        }
     }
 }
 

@@ -292,6 +292,9 @@ export interface CodexSession {
    * the whole rollout file as a continuation of another paginated thread's history.
    * Null for legacy-history sessions or paginated threads with no inherited prefix. */
   history_base_thread_id: string | null;
+  /** The agent this session belongs to: "codex" | "claude" | "pi".
+   * Absent when connected to an older backend (treated as "codex"). */
+  provider?: string;
   /** Present when only a page of turns was returned for a large session. */
   pagination?: SessionPagination | null;
 }
@@ -374,6 +377,9 @@ export interface CodexSessionInfo {
   last_activity_time: string;
   /** Size of the rollout file on disk, in bytes. */
   file_size_bytes: number;
+  /** The agent this session belongs to: "codex" | "claude" | "pi".
+   * Absent when connected to an older backend (treated as "codex"). */
+  provider?: string;
 }
 
 export interface SessionActivityUpdate {

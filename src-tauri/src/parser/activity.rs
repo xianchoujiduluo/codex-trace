@@ -4,9 +4,11 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
+use super::chat::{ChatBlock, ChatEvent};
 use super::compression::resolve_rollout_path;
 use super::discover::{scan_session_file, user_message_from_payload, CodexSessionInfo};
 use super::entry::{event_msg_type, RawEntry};
+use super::provider::Provider;
 
 /// A session whose file has not been written recently cannot still be actively processing.
 pub const ACTIVITY_STALE_AFTER: Duration = Duration::from_secs(60);
@@ -42,6 +44,7 @@ pub struct ActivitySnapshot {
 pub struct ActivityTracker {
     requested_path: PathBuf,
     resolved_path: PathBuf,
+    provider: Provider,
     parser_offset: u64,
     pending_line: String,
     turn_count: u32,
@@ -49,6 +52,7 @@ pub struct ActivityTracker {
     is_ongoing: bool,
     last_activity_time: String,
     last_user_message: Option<String>,
+    pending_tool_calls: usize,
     fingerprint: FileFingerprint,
 }
 
@@ -73,6 +77,7 @@ impl ActivityTracker {
         Self {
             requested_path,
             resolved_path,
+            provider: Provider::from_id(&info.provider).unwrap_or(Provider::Codex),
             parser_offset,
             pending_line: String::new(),
             turn_count: info.turn_count,
@@ -80,6 +85,7 @@ impl ActivityTracker {
             is_ongoing: info.is_ongoing,
             last_activity_time: info.last_activity_time.clone(),
             last_user_message: info.last_user_message.clone(),
+            pending_tool_calls: 0,
             fingerprint,
         }
     }
@@ -88,8 +94,12 @@ impl ActivityTracker {
     /// `from_info`, seeded by the initial picker scan, and never take this path for appends.
     pub fn load(path: &Path) -> Result<Self, String> {
         let scan_path = resolve_rollout_path(path).unwrap_or_else(|| path.to_path_buf());
-        let mut info = scan_session_file(&scan_path)
-            .ok_or_else(|| format!("unable to scan session file: {}", path.display()))?;
+        let provider = Provider::detect_from_path(path);
+        let mut info = match provider {
+            Provider::Codex => scan_session_file(&scan_path),
+            _ => super::chat::scan_chat_session(&scan_path, provider),
+        }
+        .ok_or_else(|| format!("unable to scan session file: {}", path.display()))?;
         // Keep the requested path stable when a plain rollout has just been replaced by zstd.
         // The next refresh can then detect the replacement without changing the frontend key.
         info.path = path.to_string_lossy().to_string();
@@ -183,7 +193,12 @@ impl ActivityTracker {
             if line.is_empty() {
                 return Ok(self.finish_refresh());
             }
-            if RawEntry::parse(line).is_some() {
+            let parseable = match self.provider {
+                Provider::Codex => RawEntry::parse(line).is_some(),
+                // Chat lines carry plain JSON; a parseable object is complete.
+                _ => serde_json::from_str::<serde_json::Value>(line).is_ok(),
+            };
+            if parseable {
                 self.process_line(line);
             } else {
                 self.pending_line = line.to_string();
@@ -201,10 +216,55 @@ impl ActivityTracker {
     }
 
     fn process_line(&mut self, line: &str) {
-        let Some(entry) = RawEntry::parse(line) else {
+        match self.provider {
+            Provider::Codex => {
+                let Some(entry) = RawEntry::parse(line) else {
+                    return;
+                };
+                self.process_entry(&entry);
+            }
+            provider => self.process_chat_line(provider, line),
+        }
+    }
+
+    /// Interpret one appended chat-provider line (Claude Code / pi) using the
+    /// same adapters as the full parser, so activity stays consistent with
+    /// what a session load would show.
+    fn process_chat_line(&mut self, provider: Provider, line: &str) {
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(line) else {
             return;
         };
-        self.process_entry(&entry);
+        if let Some(timestamp) = value.get("timestamp").and_then(|t| t.as_str()) {
+            self.last_activity_time = timestamp.to_string();
+        }
+        if let Some(message) = super::provider::chat_user_message_from_line(provider, line) {
+            self.last_user_message = Some(message);
+        }
+        for event in super::chat::adapter_for(provider).adapt(&value) {
+            match event {
+                ChatEvent::User { .. } => {
+                    self.turn_count += 1;
+                    self.is_ongoing = true;
+                }
+                ChatEvent::Assistant { blocks, .. } => {
+                    self.pending_tool_calls += blocks
+                        .iter()
+                        .filter(|block| matches!(block, ChatBlock::ToolUse { .. }))
+                        .count();
+                    self.is_ongoing = true;
+                }
+                ChatEvent::ToolResult { .. } => {
+                    self.pending_tool_calls = self.pending_tool_calls.saturating_sub(1);
+                    if self.pending_tool_calls == 0 {
+                        self.is_ongoing = false;
+                    }
+                }
+                ChatEvent::Ignored
+                | ChatEvent::Meta { .. }
+                | ChatEvent::ModelChange { .. }
+                | ChatEvent::Title { .. } => {}
+            }
+        }
     }
 
     fn process_entry(&mut self, entry: &RawEntry) {

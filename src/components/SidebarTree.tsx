@@ -4,7 +4,13 @@ import { formatFileSize, timeAgo } from "../../shared/format";
 import { copyText } from "../lib/copyText";
 import { downloadSession } from "../lib/downloadSession";
 import { sessionDisplayName } from "../lib/sessionDisplay";
-import { isPrimarySession } from "../lib/sessionFilter";
+import {
+  filterSessionsByProvider,
+  isPrimarySession,
+  providerLabel,
+  sessionProvider,
+  type ProviderFilter,
+} from "../lib/sessionFilter";
 import { sessionRelativePath } from "../lib/sessionPath";
 import {
   groupSessions,
@@ -25,6 +31,7 @@ interface SidebarTreeProps {
   selectionMode?: boolean;
   selectedSessionIds?: ReadonlySet<string>;
   collapsedDates: Set<string>;
+  providerFilter?: ProviderFilter;
   onSelectSession: (info: CodexSessionInfo) => void;
   onToggleSessionSelection?: (info: CodexSessionInfo) => void;
   onToggleDate: (groupKey: string) => void;
@@ -39,6 +46,7 @@ export function SidebarTree({
   selectionMode = false,
   selectedSessionIds = EMPTY_SESSION_IDS,
   collapsedDates,
+  providerFilter = "all",
   onSelectSession,
   onToggleSessionSelection,
   onToggleDate,
@@ -48,7 +56,10 @@ export function SidebarTree({
   const [downloadState, setDownloadState] = useState<
     { path: string; status: "loading" | "success" | "error" } | undefined
   >();
-  const primarySessions = useMemo(() => sessions.filter(isPrimarySession), [sessions]);
+  const primarySessions = useMemo(
+    () => filterSessionsByProvider(sessions, providerFilter).filter(isPrimarySession),
+    [sessions, providerFilter],
+  );
   const grouped = useMemo(
     () => groupSessions(primarySessions, groupMode, sortOrder),
     [primarySessions, groupMode, sortOrder],
@@ -188,6 +199,14 @@ export function SidebarTree({
                       <span className="sidebar-tree__session-label" title={displayName}>
                         {displayName}
                       </span>
+                      {sessionProvider(s) !== "codex" && (
+                        <span
+                          className="sidebar-tree__provider-badge"
+                          title={providerLabel(sessionProvider(s))}
+                        >
+                          {providerLabel(sessionProvider(s))}
+                        </span>
+                      )}
                       <SubagentMarker count={s.spawned_worker_ids.length} />
                       {s.is_ongoing && <OngoingDots count={1} />}
                       <span className="sidebar-tree__size">
