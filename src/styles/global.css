@@ -1192,6 +1192,99 @@ body {
   background: var(--text-secondary);
 }
 
+/* ---- Compact activity timeline (tool calls + thinking) under an assistant message ---- */
+
+.activity {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 6px 0 2px;
+}
+
+.activity-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 24px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.activity-line:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.activity-line__icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.activity-line__label {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.activity-line__summary {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.activity-line__diff {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.activity-line__diff-add {
+  color: var(--success, #5faf5f);
+}
+
+.activity-line__diff-del {
+  color: var(--error);
+  opacity: 0.8;
+}
+
+.activity-line__failed {
+  flex-shrink: 0;
+  margin-left: 8px;
+  color: var(--error);
+  font-size: 11px;
+}
+
+.activity-line--thinking {
+  font-style: italic;
+}
+
+.activity-line__hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.activity-line__thinking-text {
+  margin: 0 0 4px 26px;
+  padding: 6px 10px;
+  border-left: 2px solid var(--border);
+  color: var(--reasoning-text);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
 .message--system {
   border-left-color: var(--text-muted);
   opacity: 0.8;

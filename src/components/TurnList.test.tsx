@@ -180,7 +180,7 @@ describe("TurnList", () => {
     expect(document.querySelector(".turn-list__turn")).not.toHaveClass("turn-list__turn--subagent");
   });
 
-  it("shows tool count for a single tool call", () => {
+  it("renders one activity line per tool call with kind and summary", () => {
     render(
       <TurnList
         turns={[makeTurn({ tool_calls: [EXEC_TOOL] })]}
@@ -188,10 +188,11 @@ describe("TurnList", () => {
         onSelectTurn={vi.fn()}
       />,
     );
-    expect(screen.getByText("1 tool")).toBeInTheDocument();
+    expect(screen.getByText("Shell")).toBeInTheDocument();
+    expect(screen.getByText("ls")).toBeInTheDocument();
   });
 
-  it("pluralises tool count for multiple tool calls", () => {
+  it("renders one activity line per tool call for multiple calls", () => {
     const tool2 = { ...EXEC_TOOL, call_id: "c2" };
     render(
       <TurnList
@@ -200,7 +201,7 @@ describe("TurnList", () => {
         onSelectTurn={vi.fn()}
       />,
     );
-    expect(screen.getByText("2 tools")).toBeInTheDocument();
+    expect(screen.getAllByText("Shell")).toHaveLength(2);
   });
 
   it("shows ongoing dot for an ongoing turn", () => {
@@ -283,7 +284,7 @@ describe("TurnList", () => {
         onSelectTurn={vi.fn()}
       />,
     );
-    expect(screen.getByText("1 think")).toBeInTheDocument();
+    expect(screen.getByText("Thinking")).toBeInTheDocument();
   });
 
   it("filters turns within the current session", () => {

@@ -5,17 +5,10 @@ import { formatExactTime } from "../lib/format";
 import { useAutoScroll } from "../hooks/useAutoScroll";
 import { useScrollToSelected } from "../hooks/useScrollToSelected";
 import { OngoingDots } from "./OngoingDots";
-import {
-  BackIcon,
-  CodexIcon,
-  ForwardIcon,
-  TokensIcon,
-  ToolsIcon,
-  DurationIcon,
-  ThinkingIcon,
-} from "./Icons";
+import { BackIcon, CodexIcon, ForwardIcon, TokensIcon, DurationIcon } from "./Icons";
 import { tokenBreakdownTitle } from "./TokenBar";
 import { SubagentMarker } from "./SubagentMarker";
+import { ActivityTimeline } from "./ActivityTimeline";
 import { matchesTurn } from "../lib/turnSearch";
 
 interface TurnListProps {
@@ -149,7 +142,6 @@ export function TurnList({
           const hasDetail = Boolean(
             turn.error || turn.agent_messages.length > 0 || turn.tool_calls.length > 0,
           );
-          const reasoningCount = turn.agent_messages.filter((m) => m.is_reasoning).length;
           const subagentCount = turn.collab_spawns.length;
           const usesSubagents = turn.tool_calls.some((tool) =>
             ["spawn_agent", "wait_agent", "interrupt_agent", "followup_task"].includes(tool.kind),
@@ -236,7 +228,9 @@ export function TurnList({
                   </div>
                 )}
 
-                {(turn.turn_tokens || turn.tool_calls.length > 0 || turn.duration_ms !== null) && (
+                <ActivityTimeline turn={turn} onOpenDetail={() => onSelectTurn(i)} />
+
+                {(turn.turn_tokens || turn.duration_ms !== null) && (
                   <div className="message__stats">
                     {turn.status !== "ongoing" && (
                       <span className={`message__stat turn-list__status--${turn.status}`}>
@@ -259,22 +253,6 @@ export function TurnList({
                           ),
                         )}{" "}
                         tok
-                      </span>
-                    )}
-                    {turn.tool_calls.length > 0 && (
-                      <span className="message__stat">
-                        <span className="message__stat-icon">
-                          <ToolsIcon />
-                        </span>
-                        {turn.tool_calls.length} tool{turn.tool_calls.length > 1 ? "s" : ""}
-                      </span>
-                    )}
-                    {reasoningCount > 0 && (
-                      <span className="message__stat">
-                        <span className="message__stat-icon">
-                          <ThinkingIcon />
-                        </span>
-                        {reasoningCount} think
                       </span>
                     )}
                     {turn.duration_ms !== null && (

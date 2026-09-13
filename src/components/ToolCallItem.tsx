@@ -29,7 +29,7 @@ interface ToolCallItemProps {
   onOpenWorker?: (tool: CodexToolCall) => void;
 }
 
-function kindIcon(kind: CodexToolCall["kind"], failed: boolean) {
+export function kindIcon(kind: CodexToolCall["kind"], failed: boolean) {
   if (failed) return <WarningIcon />;
   switch (kind) {
     case "code_mode":
