@@ -124,6 +124,61 @@ function renderTurnDetail(turn: CodexTurn) {
   render(<TurnDetail turn={turn} expanded={new Set()} onToggle={vi.fn()} onBack={vi.fn()} />);
 }
 
+describe("TurnDetail reasoning display", () => {
+  it("renders plaintext reasoning entries collapsed by default", () => {
+    const turn = makeTurn({
+      agent_messages: [
+        {
+          text: "Need to check the auth module first.",
+          phase: null,
+          timestamp: "2026-04-26T10:00:05Z",
+          is_reasoning: true,
+        },
+        FINAL_MSG,
+      ],
+    });
+
+    renderTurnDetail(turn);
+
+    // Plaintext reasoning shows a collapsible section, not the encrypted note.
+    expect(screen.getByText("Reasoning")).toBeInTheDocument();
+    expect(screen.queryByText("(reasoning encrypted — cannot display)")).not.toBeInTheDocument();
+    const summary = screen.getByText("1 entry");
+    expect(summary).toBeInTheDocument();
+    // Collapsed by default: the reasoning text is present in the DOM but hidden.
+    const entry = screen.getByText(/Need to check the auth module first/);
+    expect(entry).toBeInTheDocument();
+    fireEvent.click(summary);
+    expect(entry.closest("details")).toHaveAttribute("open");
+  });
+
+  it("keeps the encrypted note when reasoning carries no plaintext", () => {
+    const turn = makeTurn({
+      agent_messages: [
+        {
+          text: "",
+          phase: null,
+          timestamp: "2026-04-26T10:00:05Z",
+          is_reasoning: true,
+        },
+        FINAL_MSG,
+      ],
+    });
+
+    renderTurnDetail(turn);
+
+    expect(screen.getByText("(reasoning encrypted — cannot display)")).toBeInTheDocument();
+    expect(screen.queryByText("Reasoning")).toBeInTheDocument();
+    expect(screen.queryByText("1 entry")).not.toBeInTheDocument();
+  });
+
+  it("shows no reasoning section when the turn has no reasoning messages", () => {
+    renderTurnDetail(makeTurn());
+
+    expect(screen.queryByText("Reasoning")).not.toBeInTheDocument();
+  });
+});
+
 describe("TurnDetail", () => {
   it("lists linked agent sessions and opens their execution details", () => {
     const worker = makeWorkerSession();

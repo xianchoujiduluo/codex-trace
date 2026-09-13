@@ -255,11 +255,26 @@ export function TurnDetail({
                 className="turn-detail__section-label"
                 style={{ color: "var(--reasoning-text)" }}
               >
-                Reasoning (encrypted)
+                Reasoning
               </div>
-              <div className="turn-detail__reasoning-note">
-                (reasoning encrypted — cannot display)
-              </div>
+              {reasoning.every((message) => !message.text.trim()) ? (
+                <div className="turn-detail__reasoning-note">
+                  (reasoning encrypted — cannot display)
+                </div>
+              ) : (
+                <details className="turn-detail__reasoning">
+                  <summary>
+                    {reasoning.length} {reasoning.length === 1 ? "entry" : "entries"}
+                  </summary>
+                  {reasoning.map((message, i) =>
+                    message.text.trim() ? (
+                      <pre key={`reasoning-${i}`} className="turn-detail__reasoning-entry">
+                        {message.text}
+                      </pre>
+                    ) : null,
+                  )}
+                </details>
+              )}
             </div>
           )}
 

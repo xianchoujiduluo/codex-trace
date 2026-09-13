@@ -3264,6 +3264,24 @@ body {
   font-style: italic;
   font-size: 13px;
 }
+.turn-detail__reasoning summary {
+  cursor: pointer;
+  color: var(--reasoning-text);
+  font-size: 12px;
+  user-select: none;
+}
+.turn-detail__reasoning-entry {
+  margin: 8px 0 0;
+  padding: 6px 10px;
+  border-left: 2px solid var(--border);
+  color: var(--reasoning-text);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow-y: auto;
+}
 .turn-detail__compaction-note {
   font-size: 12px;
   color: var(--text-dim);
