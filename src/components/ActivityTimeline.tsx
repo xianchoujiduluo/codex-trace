@@ -39,6 +39,42 @@ const KIND_LABELS: Record<CodexToolCall["kind"], string> = {
   unknown: "Tool",
 };
 
+/** Friendly labels for well-known tools that arrive with the generic "unknown" kind
+ * (chat providers like pi / Claude Code report file tools without a kind taxonomy). */
+const NAME_LABELS: Record<string, string> = {
+  read: "Read",
+  edit: "Edit",
+  write: "Write",
+  multiedit: "Edit",
+  notebookedit: "Edit",
+  grep: "Search",
+  glob: "Find",
+  ls: "List",
+  todowrite: "Todo",
+  task: "Agent",
+  bash: "Shell",
+  webfetch: "Web",
+  websearch: "Web",
+  slashcommand: "Command",
+};
+
+function kindLabel(tool: CodexToolCall): string {
+  const byKind = KIND_LABELS[tool.kind];
+  if (tool.kind !== "unknown" && byKind) return byKind;
+  return NAME_LABELS[tool.name.toLowerCase()] ?? "Tool";
+}
+
+/** First usable string field from a tool's structured arguments (path, query…). */
+function argumentTarget(tool: CodexToolCall): string | null {
+  const args = tool.arguments;
+  if (!args || typeof args !== "object" || Array.isArray(args)) return null;
+  for (const key of ["path", "file_path", "notebook_path", "url", "query", "pattern", "prompt"]) {
+    const value = (args as Record<string, unknown>)[key];
+    if (typeof value === "string" && value.trim().length > 0) return value.trim();
+  }
+  return null;
+}
+
 /** Short added/removed line counts across a patch tool's changed files. */
 function patchStatLine(tool: CodexToolCall): string | null {
   if (!tool.patch_changes) return null;
@@ -68,9 +104,12 @@ function toolSummary(tool: CodexToolCall): string {
   if (tool.kind === "patch_apply" && tool.patch_changes) {
     return Object.keys(tool.patch_changes).join(", ");
   }
+  const target = argumentTarget(tool);
+  if (target) return target;
   if (tool.input_text) {
     const firstLine = tool.input_text.split("\n").find((line) => line.trim().length > 0);
-    if (firstLine) return firstLine.trim();
+    // Structured arguments rendered as text come out as raw JSON — skip to the name.
+    if (firstLine && !firstLine.trimStart().startsWith("{")) return firstLine.trim();
   }
   return tool.name;
 }
@@ -148,7 +187,7 @@ export function ActivityTimeline({ turn, onOpenDetail }: ActivityTimelineProps) 
             }}
           >
             <span className="activity-line__icon">{kindIcon(item.tool.kind, failed)}</span>
-            <span className="activity-line__label">{KIND_LABELS[item.tool.kind]}</span>
+            <span className="activity-line__label">{kindLabel(item.tool)}</span>
             <span className="activity-line__summary">{toolSummary(item.tool)}</span>
             {stats && (
               <span className="activity-line__diff">

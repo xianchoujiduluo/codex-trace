@@ -1073,8 +1073,9 @@ body {
   justify-content: center;
   gap: 6px;
   width: calc(100% - 32px);
+  max-width: 848px;
   min-height: 32px;
-  margin: 8px 16px;
+  margin: 8px auto;
   padding: 5px 10px;
   color: var(--text-dim);
   background: var(--bg-elevated);
@@ -1100,6 +1101,12 @@ body {
 .turn-list__turn {
   display: flex;
   flex-direction: column;
+  /* Constrain the transcript to a centered reading column, like chat clients:
+     full-width windows otherwise leave a large dead zone between the assistant
+     column and the right-aligned user bubble. */
+  max-width: 880px;
+  width: 100%;
+  margin: 0 auto;
 }
 
 .message {
@@ -1121,8 +1128,8 @@ body {
 /* User prompt: right-aligned bubble, clearly boxed. */
 .message--user {
   align-self: flex-end;
-  max-width: min(78%, 720px);
-  margin: 14px 16px 2px auto;
+  max-width: min(78%, 640px);
+  margin: 10px 16px 2px auto;
   padding: 8px 12px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);

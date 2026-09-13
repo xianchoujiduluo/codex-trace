@@ -166,3 +166,51 @@ describe("ActivityTimeline", () => {
     expect(screen.getByText(/Need to inspect the parser/)).toBeVisible();
   });
 });
+
+describe("ActivityTimeline friendly summaries", () => {
+  it("labels generic file tools by name and shows the path target", () => {
+    render(
+      <ActivityTimeline
+        turn={makeTurn({
+          tool_calls: [
+            {
+              ...EXEC_TOOL,
+              kind: "unknown",
+              name: "read",
+              command: null,
+              input_text: '{"path":"src/components/ViewToolbar.tsx","limit":30}',
+              arguments: { path: "src/components/ViewToolbar.tsx", limit: 30 },
+            },
+          ],
+          tool_call_orders: [0],
+        })}
+        onOpenDetail={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Read")).toBeInTheDocument();
+    expect(screen.getByText("src/components/ViewToolbar.tsx")).toBeInTheDocument();
+    expect(screen.queryByText(/"path"/)).not.toBeInTheDocument();
+  });
+
+  it("falls back to search pattern when no path field exists", () => {
+    render(
+      <ActivityTimeline
+        turn={makeTurn({
+          tool_calls: [
+            {
+              ...EXEC_TOOL,
+              kind: "unknown",
+              name: "grep",
+              command: null,
+              arguments: { pattern: "BottomBar", output_mode: "content" },
+            },
+          ],
+          tool_call_orders: [0],
+        })}
+        onOpenDetail={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Search")).toBeInTheDocument();
+    expect(screen.getByText("BottomBar")).toBeInTheDocument();
+  });
+});
