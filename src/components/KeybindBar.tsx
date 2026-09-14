@@ -21,7 +21,6 @@ const pickerKeys: KeyHint[] = [
 const listKeys: KeyHint[] = [
   { key: "j/k", label: "nav" },
   { key: "Enter", label: "detail" },
-  { key: "e/c", label: "expand/collapse" },
   { key: "q", label: "sessions" },
   { key: "n/p", label: "replies" },
   { key: "/", label: "search" },

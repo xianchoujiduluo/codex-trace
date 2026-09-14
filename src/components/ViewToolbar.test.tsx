@@ -33,8 +33,6 @@ describe("ViewToolbar scroll buttons", () => {
         view="detail"
         hasSession
         onGoToSessions={vi.fn()}
-        onExpandAll={vi.fn()}
-        onCollapseAll={vi.fn()}
         onOpenSettings={vi.fn()}
         {...toolbarSearchProps}
         replyNavigation={{
@@ -59,8 +57,6 @@ describe("ViewToolbar scroll buttons", () => {
         view="list"
         hasSession
         onGoToSessions={vi.fn()}
-        onExpandAll={vi.fn()}
-        onCollapseAll={vi.fn()}
         onOpenSettings={vi.fn()}
         {...toolbarSearchProps}
         onOpenSearch={onOpenSearch}
@@ -75,8 +71,6 @@ describe("ViewToolbar scroll buttons", () => {
         view="list"
         hasSession
         onGoToSessions={vi.fn()}
-        onExpandAll={vi.fn()}
-        onCollapseAll={vi.fn()}
         onOpenSettings={vi.fn()}
         {...toolbarSearchProps}
         searchOpen
@@ -96,8 +90,6 @@ describe("ViewToolbar scroll buttons", () => {
         view="list"
         hasSession
         onGoToSessions={vi.fn()}
-        onExpandAll={vi.fn()}
-        onCollapseAll={vi.fn()}
         onOpenSettings={vi.fn()}
         {...toolbarSearchProps}
       />,
@@ -115,8 +107,6 @@ describe("ViewToolbar scroll buttons", () => {
         view="list"
         hasSession
         onGoToSessions={vi.fn()}
-        onExpandAll={vi.fn()}
-        onCollapseAll={vi.fn()}
         onOpenSettings={vi.fn()}
         {...toolbarSearchProps}
       />,
@@ -145,8 +135,6 @@ describe("ViewToolbar scroll buttons", () => {
         view="picker"
         hasSession={false}
         onGoToSessions={vi.fn()}
-        onExpandAll={vi.fn()}
-        onCollapseAll={vi.fn()}
         onOpenSettings={vi.fn()}
         {...toolbarSearchProps}
       />,

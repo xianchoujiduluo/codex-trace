@@ -117,18 +117,21 @@ describe("TurnList", () => {
     expect(screen.getByText("Hi there!")).toBeInTheDocument();
   });
 
-  it("shows user messages expanded and Codex messages collapsed by default", () => {
+  it("shows the full user message and the agent preview without any collapse affordance", () => {
+    const onSelectTurn = vi.fn();
     const { container } = render(
-      <TurnList turns={[makeTurn()]} selectedIndex={-1} onSelectTurn={vi.fn()} />,
+      <TurnList turns={[makeTurn()]} selectedIndex={-1} onSelectTurn={onSelectTurn} />,
     );
 
     const userMessage = container.querySelector(".message--user .message__content")!;
     const codexMessage = container.querySelector(".message--claude .message__content")!;
     expect(userMessage).not.toHaveClass("message__content--collapsed");
-    expect(codexMessage).toHaveClass("message__content--collapsed");
+    expect(codexMessage).not.toHaveClass("message__content--collapsed");
 
-    fireEvent.click(userMessage.closest(".message--user")!);
-    expect(userMessage).toHaveClass("message__content--collapsed");
+    // Clicking a message no longer folds it — it opens the turn detail.
+    fireEvent.click(container.querySelector(".message--user")!);
+    expect(onSelectTurn).toHaveBeenCalledWith(0);
+    expect(userMessage).not.toHaveClass("message__content--collapsed");
   });
 
   it("marks a turn that spawned a subagent", () => {
@@ -181,7 +184,7 @@ describe("TurnList", () => {
     expect(document.querySelector(".turn-list__turn")).not.toHaveClass("turn-list__turn--subagent");
   });
 
-  it("renders one activity line per tool call with kind and summary", () => {
+  it("hides tool activity until its toggle is pressed", () => {
     render(
       <TurnList
         turns={[makeTurn({ tool_calls: [EXEC_TOOL] })]}
@@ -189,11 +192,33 @@ describe("TurnList", () => {
         onSelectTurn={vi.fn()}
       />,
     );
+
+    // Closed by default: the transcript shows prose, not mechanics.
+    expect(screen.queryByText("Shell")).not.toBeInTheDocument();
+    const toggle = screen.getByText("Show activity (1)");
+
+    fireEvent.click(toggle);
     expect(screen.getByText("Shell")).toBeInTheDocument();
     expect(screen.getByText("ls")).toBeInTheDocument();
   });
 
-  it("renders one activity line per tool call for multiple calls", () => {
+  it("closes the activity timeline when its toggle is pressed again", () => {
+    render(
+      <TurnList
+        turns={[makeTurn({ tool_calls: [EXEC_TOOL] })]}
+        selectedIndex={-1}
+        onSelectTurn={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Show activity (1)"));
+    expect(screen.getByText("Shell")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Hide activity (1)"));
+    expect(screen.queryByText("Shell")).not.toBeInTheDocument();
+  });
+
+  it("counts every tool call in the activity toggle label", () => {
     const tool2 = { ...EXEC_TOOL, call_id: "c2" };
     render(
       <TurnList
@@ -202,6 +227,8 @@ describe("TurnList", () => {
         onSelectTurn={vi.fn()}
       />,
     );
+
+    fireEvent.click(screen.getByText("Show activity (2)"));
     expect(screen.getAllByText("Shell")).toHaveLength(2);
   });
 
@@ -271,7 +298,7 @@ describe("TurnList", () => {
     expect(msgs.length).toBeGreaterThan(0);
   });
 
-  it("shows reasoning count when reasoning messages are present", () => {
+  it("counts reasoning blocks in the activity toggle label", () => {
     const reasoningMsg: AgentMessage = {
       text: "thinking...",
       phase: null,
@@ -285,6 +312,9 @@ describe("TurnList", () => {
         onSelectTurn={vi.fn()}
       />,
     );
+
+    expect(screen.queryByText("Thinking")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Show activity (1)"));
     expect(screen.getByText("Thinking")).toBeInTheDocument();
   });
 

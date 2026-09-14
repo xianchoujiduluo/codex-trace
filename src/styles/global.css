@@ -33,8 +33,10 @@
   --on-accent: #ffffff;
 
   /* The single centered reading column width shared by the transcript, the
-     turn detail and the session picker. */
-  --reading-width: 880px;
+     turn detail and the session picker. Percentage-based so the transcript
+     tracks the window instead of stopping at a fixed pixel width; the cap
+     only exists to stop ultrawide displays from stretching lines unreadably. */
+  --reading-width: min(85%, 1600px);
 
   /* Model family */
   --model-opus: #d98ba6;
@@ -920,20 +922,16 @@ body {
   flex-direction: column;
   /* Constrain the transcript to a centered reading column, like chat clients:
      full-width windows otherwise leave a large dead zone between the assistant
-     column and the right-aligned user bubble. The column is itself a bordered
-     card, so adjacent turns read as separate blocks instead of one hairline
-     separated list. */
+     column and the right-aligned user bubble. The column itself is unframed —
+     only the user bubble carries an outline, so turns read as a continuous
+     conversation rather than a stack of boxes. */
   max-width: var(--reading-width);
   width: 100%;
-  margin: 8px auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card, 6px);
-  background: var(--bg-surface);
-  overflow: hidden;
+  margin: 20px auto;
 }
 
 .message {
-  padding: 4px 16px;
+  padding: 6px 20px;
   border-left: 3px solid transparent;
   cursor: pointer;
   transition: background 0.1s;
@@ -948,13 +946,13 @@ body {
   border-left-color: var(--accent);
 }
 
-/* User prompt: right-aligned bubble, clearly boxed. Sits one elevation level
-   above the turn card so the two outlines don't read as a double border. */
+/* User prompt: right-aligned bubble. The turn column itself is unframed, so
+   this outline is the only box in the transcript and reads as the prompt. */
 .message--user {
   align-self: flex-end;
   max-width: min(78%, 640px);
-  margin: 10px 16px 2px auto;
-  padding: 8px 12px;
+  margin: 16px 20px 4px auto;
+  padding: 10px 14px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -972,34 +970,20 @@ body {
 .message--user .message__content {
   color: var(--text-primary);
   font-size: 13px;
+  line-height: 1.6;
 }
 
 .message__timestamp--user {
   display: block;
-  margin-top: 3px;
+  margin-top: 5px;
   font-size: 10px;
   text-align: right;
   color: var(--text-muted);
 }
 
-.message--user .message__content--collapsed::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 2em;
-  background: linear-gradient(transparent, var(--bg-elevated));
-  pointer-events: none;
-}
-
-.message--user .message__content--collapsed {
-  position: relative;
-}
-
 /* Agent response: left, full-width, plain content on the page background. */
 .message--claude {
-  padding: 4px 24px 8px 16px;
+  padding: 6px 28px 10px 20px;
 }
 
 .message--claude:hover {
@@ -1012,7 +996,7 @@ body {
 
 .message--claude .message__content {
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.7;
   color: var(--text-primary);
 }
 
@@ -1028,8 +1012,8 @@ body {
 .activity {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  margin: 6px 0 2px;
+  gap: 2px;
+  margin: 10px 0 4px;
 }
 
 .activity-line {
@@ -1037,8 +1021,8 @@ body {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  min-height: 24px;
-  padding: 2px 6px;
+  min-height: 28px;
+  padding: 4px 8px;
   border-radius: 5px;
   color: var(--text-muted);
   font-size: 12px;
@@ -1135,7 +1119,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
   min-width: 0;
 }
 
@@ -1198,6 +1182,33 @@ body {
   color: var(--bg);
 }
 
+/* Per-message toggle for the tool-call / reasoning timeline. Sits next to the
+   Detail button and defaults to closed, so a transcript reads as prose until
+   the reader asks for the mechanics. */
+.message__activity-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.message__activity-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-dim);
+}
+
+.message__activity-btn--open {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .message__content {
   font-size: 12px;
   color: var(--text-secondary);
@@ -1206,31 +1217,8 @@ body {
   overflow: hidden;
 }
 
-.message__content--collapsed {
-  max-height: calc(12px * 1.5 * 12); /* ~12 lines */
-  overflow: hidden;
-}
 .message__content--error {
   color: var(--error);
-}
-
-.message--claude .message__content--collapsed {
-  position: relative;
-}
-
-.message--claude .message__content--collapsed::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 2em;
-  background: linear-gradient(transparent, var(--bg));
-  pointer-events: none;
-}
-
-.message--claude.message--selected .message__content--collapsed::after {
-  background: linear-gradient(transparent, var(--bg-elevated));
 }
 
 .message__stats {
@@ -1266,11 +1254,6 @@ body {
   display: inline-flex;
   align-items: center;
   font-size: 13px;
-}
-
-.message__expand-hint {
-  color: var(--text-muted);
-  font-size: 11px;
 }
 
 /* ---- Compact separator ---- */
@@ -2694,29 +2677,6 @@ body {
 .app__settings-btn:hover {
   color: var(--text-bright);
 }
-.app__main {
-  flex: 1 1 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.app__panels {
-  display: flex;
-  flex-direction: row;
-  flex: 1 1 0;
-  overflow: hidden;
-}
-.app__turn-list {
-  width: 300px;
-  min-width: 200px;
-  border-right: 1px solid var(--border);
-  overflow-y: auto;
-  flex-shrink: 0;
-}
-.app__turn-detail {
-  flex: 1 1 0;
-  overflow-y: auto;
-}
 .app__loading {
   padding: 1rem;
   color: var(--text-dim);
@@ -3162,144 +3122,6 @@ body {
   justify-content: center;
   gap: 8px;
   padding: 24px;
-  color: var(--text-dim);
-}
-
-/* Turn list */
-.turn-list {
-  padding: 4px 0;
-}
-/* Separator for the compact row-based turn list (the chat view uses the card
-   rule in the "Message Item" section instead). */
-.turn-list__turn:not(:last-child) {
-  border-bottom: 1px solid var(--border);
-}
-.turn-list__row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-left: 3px solid transparent;
-  cursor: pointer;
-  min-width: 0;
-}
-.turn-list__row:hover {
-  background: var(--bg-hover);
-}
-.turn-list__row--user {
-  border-left-color: var(--accent);
-}
-.turn-list__row--agent {
-  border-left-color: var(--text-dim);
-}
-.turn-list__turn--selected .turn-list__row--user {
-  background: var(--bg-selected);
-}
-.turn-list__turn--selected .turn-list__row--agent {
-  background: var(--bg-elevated);
-  border-left-color: var(--accent);
-}
-.turn-list__row-icon {
-  font-size: 14px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  color: var(--text-dim);
-}
-.turn-list__row-role {
-  font-weight: 600;
-  font-size: 12px;
-  flex-shrink: 0;
-}
-.turn-list__row-role--user {
-  color: var(--accent);
-}
-.turn-list__row-role--agent {
-  color: var(--text-secondary);
-}
-.turn-list__row-preview {
-  font-size: 12px;
-  color: var(--text-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-  min-width: 0;
-}
-.turn-list__row-status {
-  font-size: 13px;
-  flex-shrink: 0;
-}
-.turn-list__row-status--complete {
-  color: var(--status-complete);
-}
-.turn-list__row-status--aborted {
-  color: var(--status-aborted);
-}
-.turn-list__row-status--error {
-  color: var(--status-error);
-}
-.turn-list__row-duration {
-  font-size: 11px;
-  color: var(--text-dim);
-  flex-shrink: 0;
-}
-.turn-list__row-tools {
-  font-size: 11px;
-  color: var(--icon-mcp);
-  flex-shrink: 0;
-}
-.turn-list__stat {
-  font-size: 11px;
-  color: var(--text-dim);
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
-}
-.turn-list__detail-btn {
-  font-size: 11px;
-  padding: 1px 8px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg-secondary);
-  color: var(--accent);
-  cursor: pointer;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: auto;
-}
-.turn-list__detail-btn:hover {
-  background: var(--accent);
-  color: var(--bg);
-}
-.turn-list__row-expanded {
-  padding: 6px 12px 8px 32px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  white-space: pre-wrap;
-  word-break: break-word;
-  background: var(--bg-secondary);
-  border-left: 3px solid var(--accent);
-}
-.turn-list__badge {
-  font-size: 10px;
-  padding: 0 4px;
-  border-radius: 3px;
-}
-.turn-list__badge--compact {
-  background: var(--text-dim);
-  color: var(--bg);
-}
-.turn-list__badge--collab {
-  background: var(--collab-badge);
-  color: var(--on-accent);
-}
-.turn-list__empty {
-  padding: 2rem;
-  text-align: center;
   color: var(--text-dim);
 }
 

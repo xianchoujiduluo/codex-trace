@@ -5,10 +5,10 @@ import { formatExactTime } from "../lib/format";
 import { useAutoScroll } from "../hooks/useAutoScroll";
 import { useScrollToSelected } from "../hooks/useScrollToSelected";
 import { OngoingDots } from "./OngoingDots";
-import { BackIcon, CodexIcon, ForwardIcon, TokensIcon, DurationIcon } from "./Icons";
+import { BackIcon, CodexIcon, ForwardIcon, TokensIcon, DurationIcon, ToolsIcon } from "./Icons";
 import { tokenBreakdownTitle } from "./TokenBar";
 import { SubagentMarker } from "./SubagentMarker";
-import { ActivityTimeline } from "./ActivityTimeline";
+import { ActivityTimeline, activityItems } from "./ActivityTimeline";
 import { matchesTurn } from "../lib/turnSearch";
 import { minimapLayout } from "../lib/minimap";
 interface TurnListProps {
@@ -49,46 +49,18 @@ export function TurnList({
   );
   const listRef = useAutoScroll<HTMLDivElement>(visibleTurns.length);
   const selectedRef = useScrollToSelected(selectedIndex);
-  const [collapsedUsers, setCollapsedUsers] = useState<Set<number>>(new Set());
-  const [expandedCodex, setExpandedCodex] = useState<Set<number>>(new Set());
-  const clickTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  // Tool calls and reasoning are the noisy part of a turn, so they start hidden
+  // and each assistant message carries its own toggle for them.
+  const [openActivity, setOpenActivity] = useState<Set<number>>(new Set());
 
-  const toggleUser = useCallback((i: number) => {
-    setCollapsedUsers((prev) => {
+  const toggleActivity = useCallback((i: number) => {
+    setOpenActivity((prev) => {
       const next = new Set(prev);
       if (next.has(i)) next.delete(i);
       else next.add(i);
       return next;
     });
   }, []);
-
-  const toggleCodex = useCallback((i: number) => {
-    setExpandedCodex((prev) => {
-      const next = new Set(prev);
-      if (next.has(i)) next.delete(i);
-      else next.add(i);
-      return next;
-    });
-  }, []);
-
-  const handleCodexClick = useCallback(
-    (i: number) => {
-      if (clickTimers.current.has(i)) {
-        clearTimeout(clickTimers.current.get(i)!);
-        clickTimers.current.delete(i);
-        onSelectTurn(i);
-      } else {
-        clickTimers.current.set(
-          i,
-          setTimeout(() => {
-            clickTimers.current.delete(i);
-            toggleCodex(i);
-          }, 250),
-        );
-      }
-    },
-    [onSelectTurn, toggleCodex],
-  );
 
   const scrollToTurn = (index: number) => {
     listRef.current
@@ -167,7 +139,6 @@ export function TurnList({
         {visibleTurns.map(({ turn, index: i }) => {
           const isSelected = i === selectedIndex;
           const userMsg = turn.user_message ?? "";
-          const userCollapsed = collapsedUsers.has(i);
           const agentPreview =
             turn.error ??
             turn.agent_messages.find((m) => m.phase === "final_answer")?.text ??
@@ -176,6 +147,8 @@ export function TurnList({
           const hasDetail = Boolean(
             turn.error || turn.agent_messages.length > 0 || turn.tool_calls.length > 0,
           );
+          const activityCount = activityItems(turn).length;
+          const activityOpen = openActivity.has(i);
           const subagentCount = turn.collab_spawns.length;
           const usesSubagents = turn.tool_calls.some((tool) =>
             ["spawn_agent", "wait_agent", "interrupt_agent", "followup_task"].includes(tool.kind),
@@ -200,20 +173,14 @@ export function TurnList({
               {/* User message — right-aligned bubble */}
               <div
                 className={`message message--user${isSelected ? " message--selected" : ""}`}
-                onClick={() => toggleUser(i)}
+                onClick={() => onSelectTurn(i)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") toggleUser(i);
+                  if (e.key === "Enter") onSelectTurn(i);
                 }}
               >
-                {userMsg && (
-                  <div
-                    className={`message__content${userCollapsed ? " message__content--collapsed" : ""}`}
-                  >
-                    {userMsg}
-                  </div>
-                )}
+                {userMsg && <div className="message__content">{userMsg}</div>}
                 {userTs && (
                   <span className="message__timestamp message__timestamp--user">{userTs}</span>
                 )}
@@ -222,7 +189,7 @@ export function TurnList({
               {/* Agent message — left, full-width plain content */}
               <div
                 className={`message message--claude${isSelected ? " message--selected" : ""}`}
-                onClick={() => handleCodexClick(i)}
+                onClick={() => onSelectTurn(i)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
@@ -240,6 +207,20 @@ export function TurnList({
                   <span className="message__role message__role--claude">{providerName}</span>
                   <SubagentMarker count={subagentCount} active={usesSubagents} />
                   {turn.status === "ongoing" && <OngoingDots />}
+                  {activityCount > 0 && (
+                    <button
+                      type="button"
+                      className={`message__activity-btn${activityOpen ? " message__activity-btn--open" : ""}`}
+                      aria-expanded={activityOpen}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleActivity(i);
+                      }}
+                    >
+                      <ToolsIcon />
+                      {activityOpen ? "Hide" : "Show"} activity ({activityCount})
+                    </button>
+                  )}
                   {hasDetail && (
                     <button
                       className="message__detail-btn"
@@ -256,13 +237,15 @@ export function TurnList({
 
                 {agentPreview && (
                   <div
-                    className={`message__content${turn.error ? " message__content--error" : ""}${!expandedCodex.has(i) ? " message__content--collapsed" : ""}`}
+                    className={`message__content${turn.error ? " message__content--error" : ""}`}
                   >
                     {agentPreview}
                   </div>
                 )}
 
-                <ActivityTimeline turn={turn} onOpenDetail={() => onSelectTurn(i)} />
+                {activityOpen && (
+                  <ActivityTimeline turn={turn} onOpenDetail={() => onSelectTurn(i)} />
+                )}
 
                 {(turn.turn_tokens || turn.duration_ms !== null) && (
                   <div className="message__stats">

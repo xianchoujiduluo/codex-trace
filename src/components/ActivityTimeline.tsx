@@ -20,7 +20,7 @@ interface ThinkingActivity {
   text: string;
 }
 
-type ActivityItem = ToolActivity | ThinkingActivity;
+export type ActivityItem = ToolActivity | ThinkingActivity;
 
 const KIND_LABELS: Record<CodexToolCall["kind"], string> = {
   code_mode: "Code",
@@ -115,14 +115,13 @@ function toolSummary(tool: CodexToolCall): string {
 }
 
 /**
- * Compact activity timeline under an assistant message, in the visual language
- * of a chat client: one muted line per tool call (icon, kind, target summary,
- * patch stats, failure state) and per reasoning block, in stream order.
+ * Tool calls and reasoning blocks of a turn, interleaved in stream order.
+ *
+ * Exported because the chat transcript needs the count to label its toggle
+ * ("Show activity (12)") without rendering the timeline itself.
  */
-export function ActivityTimeline({ turn, onOpenDetail }: ActivityTimelineProps) {
-  const [expandedThinking, setExpandedThinking] = useState<Set<number>>(new Set());
-
-  const items: ActivityItem[] = [
+export function activityItems(turn: CodexTurn): ActivityItem[] {
+  return [
     ...turn.tool_calls.map((tool, i): ToolActivity => ({
       type: "tool",
       order: turn.tool_call_orders?.[i] ?? Number.MAX_SAFE_INTEGER,
@@ -136,6 +135,17 @@ export function ActivityTimeline({ turn, onOpenDetail }: ActivityTimelineProps) 
         text: message.text,
       })),
   ].toSorted((a, b) => a.order - b.order);
+}
+
+/**
+ * Compact activity timeline under an assistant message, in the visual language
+ * of a chat client: one muted line per tool call (icon, kind, target summary,
+ * patch stats, failure state) and per reasoning block, in stream order.
+ */
+export function ActivityTimeline({ turn, onOpenDetail }: ActivityTimelineProps) {
+  const [expandedThinking, setExpandedThinking] = useState<Set<number>>(new Set());
+
+  const items = activityItems(turn);
 
   if (items.length === 0) return null;
 

@@ -8,8 +8,6 @@ interface ViewToolbarProps {
   view: ViewState;
   hasSession: boolean;
   onGoToSessions: () => void;
-  onExpandAll: () => void;
-  onCollapseAll: () => void;
   onOpenSettings: () => void;
   searchOpen: boolean;
   searchQuery: string;
@@ -40,8 +38,6 @@ export function ViewToolbar({
   view,
   hasSession,
   onGoToSessions,
-  onExpandAll,
-  onCollapseAll,
   onOpenSettings,
   searchOpen,
   searchQuery,
@@ -62,12 +58,6 @@ export function ViewToolbar({
           ← Sessions
         </button>
       )}
-      <button className="view-toolbar__btn" onClick={onExpandAll}>
-        Expand All
-      </button>
-      <button className="view-toolbar__btn" onClick={onCollapseAll}>
-        Collapse All
-      </button>
       {view !== "picker" && searchOpen ? (
         <div className="view-toolbar__search">
           <VscSearch aria-hidden="true" />

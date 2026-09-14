@@ -75,12 +75,7 @@ export function App() {
   const session = useSession();
   const picker = usePicker();
   const copyNoticeTimerRef = useRef<number | null>(null);
-  const {
-    set: expandedTools,
-    toggle: toggleTool,
-    clear: clearTools,
-    addAll: addAllTools,
-  } = useToggleSet();
+  const { set: expandedTools, toggle: toggleTool, clear: clearTools } = useToggleSet();
 
   const { loadSession, loadMore } = session;
   const { discoverSessions, updateSessionOngoing, setSearchQuery: setPickerSearchQuery } = picker;
@@ -301,17 +296,6 @@ export function App() {
     return findToolByCallId(selectedTurnData.tool_calls, workerPanelCallId);
   }, [selectedTurnData, workerPanelCallId]);
 
-  const expandAll = useCallback(() => {
-    if (view === "detail") {
-      const currentTurns = session.session?.turns ?? [];
-      if (currentTurns[selectedTurn]) {
-        addAllTools(currentTurns[selectedTurn].tool_calls.map((_, i) => i));
-      }
-    }
-  }, [view, session.session, selectedTurn, addAllTools]);
-
-  const collapseAll = useCallback(() => clearTools(), [clearTools]);
-
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((collapsed) => !collapsed);
   }, []);
@@ -394,8 +378,6 @@ export function App() {
         view={view}
         hasSession={!!session.sessionPath}
         onGoToSessions={goToSessions}
-        onExpandAll={expandAll}
-        onCollapseAll={collapseAll}
         onOpenSettings={() => setShowSettings(true)}
         searchOpen={searchOpen}
         searchQuery={
