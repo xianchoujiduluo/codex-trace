@@ -4,58 +4,71 @@
 
 :root {
   /* Background */
-  --bg: #1a1a2e;
-  --bg-surface: #16213e;
-  --bg-elevated: #222244;
-  --bg-hover: #2a2a4a;
+  --bg: #1e1e1e;
+  --bg-panel: #181818;
+  --bg-surface: #252526;
+  --bg-elevated: #2d2d30;
+  --bg-hover: #2a2d2e;
 
   /* Text hierarchy */
-  --text-primary: #d0d0d0;
-  --text-secondary: #8a8a8a;
-  --text-dim: #767676;
-  --text-muted: #585858;
+  --text-primary: #cccccc;
+  --text-secondary: #9d9d9d;
+  --text-dim: #858585;
+  --text-muted: #6e6e6e;
 
   /* Accents */
-  --accent: #5fafff;
-  --error: #ff0000;
-  --info: #5f87ff;
+  --accent: #3794ff;
+  --error: #f14c4c;
+  --info: #3794ff;
 
   /* Surfaces */
-  --border: #5f5f87;
+  --border: #3c3c3c;
+
+  /* Card geometry */
+  --radius-card: 6px;
+  --radius-pill: 999px;
+
+  /* Foreground for text/icons sitting on --accent or another saturated fill.
+     Kept as a token so a future lighter accent can't silently kill contrast. */
+  --on-accent: #ffffff;
+
+  /* The single centered reading column width shared by the transcript, the
+     turn detail and the session picker. */
+  --reading-width: 880px;
 
   /* Model family */
-  --model-opus: #ff5f87;
-  --model-sonnet: #5fafff;
-  --model-haiku: #87d787;
+  --model-opus: #d98ba6;
+  --model-sonnet: #3794ff;
+  --model-haiku: #89d185;
 
   /* Context usage */
-  --context-ok: #87d787;
-  --context-warn: #ff8700;
-  --context-crit: #ff0000;
+  --context-ok: #89d185;
+  --context-warn: #cca700;
+  --context-crit: #f14c4c;
 
   /* Permission pills */
-  --pill-bypass: #ff0000;
-  --pill-accept-edits: #af5fff;
-  --pill-plan: #87d787;
+  --pill-bypass: #f14c4c;
+  --pill-accept-edits: #b180d7;
+  --pill-plan: #89d185;
 
   /* Picker */
-  --picker-selected-bg: #3a3a3a;
+  --picker-selected-bg: #37373d;
 
   /* Ongoing */
-  --ongoing: #5faf00;
+  --ongoing: #89d185;
 
   /* Git */
-  --git-branch: #af5fff;
+  --git-branch: #b180d7;
 
   /* Token high */
-  --token-high: #ff8700;
+  --token-high: #cca700;
 
   /* Icons */
   --icon-claude: #d4a017;
   --icon-codex: #10a37f;
-  --icon-user: #5fafff;
+  --icon-user: #3794ff;
   --icon-system: #8a8aaa;
-  --icon-warning: #ff8700;
+  --icon-warning: #cca700;
   --icon-thinking: #e0c050;
   --icon-output: #63b3ed;
   --icon-tool: #9a8aef;
@@ -64,12 +77,12 @@
   --icon-duration: #8a8aaa;
   --icon-agents: #63b3ed;
   --icon-spawn: #af5fff;
-  --icon-search: #5fafff;
+  --icon-search: #3794ff;
   --icon-edit: #e0c050;
   --icon-read: #87d787;
   --icon-bash: #9a8aef;
-  --icon-web: #5fafff;
-  --icon-mcp: #af5fff;
+  --icon-web: #3794ff;
+  --icon-mcp: #a888e0;
   --icon-cron: #8a8aaa;
   --icon-git: #af5fff;
 
@@ -78,14 +91,14 @@
 
   /* Aliases & derived */
   --bg-secondary: var(--bg-surface);
-  --bg-selected: #1e2a3a;
-  --text-bright: #e0e0e0;
+  --bg-selected: #37373d;
+  --text-bright: #e6e6e6;
   --dim: var(--text-dim);
   --font-mono:
     "JetBrains Mono", "SF Mono", "Fira Code", "Cascadia Code", "Consolas", ui-monospace, monospace;
 
   /* Misc */
-  --scrollbar-thumb: #444466;
+  --scrollbar-thumb: #4a4a4a;
   --scrollbar-track: transparent;
 }
 
@@ -171,7 +184,7 @@
   font-size: 0.9em;
 }
 .icon--close {
-  color: #e06060;
+  color: var(--error);
 }
 
 /* ---- Reset & Base ---- */
@@ -218,7 +231,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--border);
+  background: #5a5a5a;
 }
 
 /* ---- App Layout ---- */
@@ -303,126 +316,6 @@ body {
   top: 1px;
 }
 
-/* ---- Project Tree Sidebar ---- */
-
-.project-tree {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg);
-  overflow: hidden;
-}
-
-.project-tree__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--dim);
-  border-bottom: 1px solid var(--border);
-}
-
-.project-tree__refresh {
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  cursor: pointer;
-  font-size: 14px;
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 4px;
-  border-radius: 3px;
-  line-height: 1;
-  transition: color 0.15s;
-}
-
-.project-tree__refresh:hover {
-  color: var(--text);
-  background: var(--bg-hover);
-}
-
-.project-tree__refresh--spinning {
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.project-tree__list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 4px 0;
-}
-
-.project-tree__item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 5px 12px;
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--fg);
-  border-left: 2px solid transparent;
-  min-width: 0;
-}
-
-.project-tree__item:hover {
-  background: var(--hover);
-}
-
-.project-tree__item--selected {
-  background: var(--hover);
-  border-left-color: var(--accent);
-  color: var(--accent);
-}
-
-.project-tree__item--highlighted {
-  background: var(--bg-hover);
-  outline: 1px solid var(--accent);
-  outline-offset: -1px;
-}
-
-.project-tree--focused {
-  outline: 1px solid var(--accent);
-  outline-offset: -1px;
-}
-
-.project-tree__name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-  text-align: left;
-}
-
-.project-tree__meta {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-  margin-left: 6px;
-}
-
-.project-tree__count {
-  font-size: 10px;
-  color: var(--dim);
-  background: var(--border);
-  padding: 0 5px;
-  border-radius: 8px;
-  line-height: 16px;
-}
-
 /* ---- Shared ongoing dots indicator ---- */
 
 .ongoing-dots {
@@ -454,85 +347,6 @@ body {
 
 .ongoing-dots > :nth-child(5) {
   animation-delay: 0.6s;
-}
-
-.project-tree__item--child {
-  font-size: 11px;
-  opacity: 0.85;
-  position: relative;
-}
-
-/* ---- Tree guide lines ---- */
-
-/* Each guide span is one ancestor depth level: a thin vertical rail. */
-.project-tree__guide {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--border);
-  opacity: 0.4;
-  pointer-events: none;
-}
-
-/* The last guide (immediate parent level) adds a short horizontal arm
-   at the item's vertical midpoint, forming an L-connector to the toggle. */
-.project-tree__guide--last::after {
-  content: "";
-  position: absolute;
-  bottom: 50%;
-  left: 0;
-  width: 5px;
-  height: 1px;
-  background: var(--border);
-  opacity: 1;
-}
-
-.project-tree__item--group {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
-  cursor: default;
-}
-
-.project-tree__item--group:hover {
-  background: transparent;
-}
-
-.project-tree__group-icon {
-  display: inline-flex;
-  align-items: center;
-  vertical-align: middle;
-  font-size: 13px;
-  margin-right: 4px;
-}
-
-/* ---- Toggle (expand/collapse) button ---- */
-
-.project-tree__toggle {
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  color: transparent;
-  border-radius: 3px;
-  margin-right: 2px;
-  cursor: default;
-  user-select: none;
-}
-
-.project-tree__toggle--active {
-  color: var(--text-dim);
-  cursor: pointer;
-}
-
-.project-tree__toggle--active:hover {
-  background: var(--bg-hover);
-  color: var(--fg);
 }
 
 /* ---- Info Bar ---- */
@@ -590,7 +404,7 @@ body {
   border-radius: 10px;
   font-size: 11px;
   font-weight: 600;
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .info-bar__pill--bypass {
@@ -781,7 +595,7 @@ body {
 .view-toolbar__btn--active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .view-toolbar__spacer {
@@ -1057,8 +871,8 @@ body {
 }
 
 .turn-list__turn--subagent {
-  background: rgba(99, 179, 237, 0.16);
-  box-shadow: inset 3px 0 0 var(--icon-agents);
+  background: color-mix(in srgb, var(--icon-spawn) 18%, transparent);
+  box-shadow: inset 3px 0 0 var(--icon-spawn);
 }
 
 .message-list__empty {
@@ -1075,8 +889,8 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  width: calc(100% - 32px);
-  max-width: 848px;
+  width: min(calc(100% - 32px), var(--reading-width));
+  max-width: var(--reading-width);
   min-height: 32px;
   margin: 8px auto;
   padding: 5px 10px;
@@ -1106,10 +920,16 @@ body {
   flex-direction: column;
   /* Constrain the transcript to a centered reading column, like chat clients:
      full-width windows otherwise leave a large dead zone between the assistant
-     column and the right-aligned user bubble. */
-  max-width: 880px;
+     column and the right-aligned user bubble. The column is itself a bordered
+     card, so adjacent turns read as separate blocks instead of one hairline
+     separated list. */
+  max-width: var(--reading-width);
   width: 100%;
-  margin: 0 auto;
+  margin: 8px auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card, 6px);
+  background: var(--bg-surface);
+  overflow: hidden;
 }
 
 .message {
@@ -1128,7 +948,8 @@ body {
   border-left-color: var(--accent);
 }
 
-/* User prompt: right-aligned bubble, clearly boxed. */
+/* User prompt: right-aligned bubble, clearly boxed. Sits one elevation level
+   above the turn card so the two outlines don't read as a double border. */
 .message--user {
   align-self: flex-end;
   max-width: min(78%, 640px);
@@ -1136,7 +957,7 @@ body {
   padding: 8px 12px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
 }
 
 .message--user:hover {
@@ -1182,7 +1003,7 @@ body {
 }
 
 .message--claude:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-hover);
 }
 
 .message--claude.message--selected {
@@ -1257,7 +1078,7 @@ body {
 }
 
 .activity-line__diff-add {
-  color: var(--success, #5faf5f);
+  color: var(--success);
 }
 
 .activity-line__diff-del {
@@ -1551,7 +1372,7 @@ body {
 }
 
 .message-detail__content {
-  max-width: 900px;
+  max-width: var(--reading-width);
   margin: 0 auto;
   min-width: 0;
 }
@@ -1671,7 +1492,7 @@ body {
 
 .detail-item {
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-card);
   margin-bottom: 6px;
   overflow: hidden;
 }
@@ -1853,7 +1674,7 @@ body {
   align-items: center;
   padding: 1px 5px;
   border-radius: 3px;
-  background: var(--warning, #b8860b);
+  background: var(--warning);
   color: var(--bg);
   font-size: 9px;
   font-weight: 600;
@@ -2145,17 +1966,17 @@ body {
 }
 
 .team-task__status-badge--completed {
-  background: rgba(135, 215, 135, 0.15);
+  background: color-mix(in srgb, var(--ongoing) 15%, transparent);
   color: var(--ongoing);
 }
 
 .team-task__status-badge--in_progress {
-  background: rgba(95, 175, 255, 0.15);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
   color: var(--accent);
 }
 
 .team-task__status-badge--pending {
-  background: rgba(88, 88, 88, 0.15);
+  background: color-mix(in srgb, var(--text-muted) 15%, transparent);
   color: var(--text-muted);
 }
 
@@ -2244,7 +2065,7 @@ body {
 .debug-viewer__filter-btn--active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .debug-viewer__search {
@@ -2314,22 +2135,22 @@ body {
 }
 
 .debug-entry__level--debug {
-  background: rgba(95, 175, 255, 0.12);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent);
 }
 
 .debug-entry__level--info {
-  background: rgba(135, 215, 135, 0.12);
+  background: color-mix(in srgb, var(--context-ok) 12%, transparent);
   color: var(--context-ok);
 }
 
 .debug-entry__level--warn {
-  background: rgba(255, 135, 0, 0.12);
+  background: color-mix(in srgb, var(--context-warn) 12%, transparent);
   color: var(--context-warn);
 }
 
 .debug-entry__level--error {
-  background: rgba(255, 0, 0, 0.12);
+  background: color-mix(in srgb, var(--error) 12%, transparent);
   color: var(--error);
 }
 
@@ -2571,7 +2392,7 @@ body {
 
 /* Messages inside agent panel get a slightly lighter background for readability */
 .agent-panel .message {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-surface);
 }
 
 .agent-panel .message--selected {
@@ -2707,32 +2528,39 @@ body {
 .settings-modal__btn--primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .settings-modal__btn--primary:hover:not(:disabled) {
-  background: #4a9aee;
+  background: color-mix(in srgb, var(--accent) 85%, #ffffff);
 }
 
 /* ============================================================
    Codex Trace additions
    ============================================================ */
 :root {
-  --icon-exec: var(--icon-bash, #87af87);
-  --icon-mcp: #af87ff;
-  --icon-web: #5f87ff;
-  --icon-image: #af5fff;
-  --icon-patch: var(--icon-git, #af8700);
-  --token-input: #5f87af;
-  --token-cached: #5f5f5f;
-  --token-output: #5faf5f;
-  --token-reasoning: #875faf;
-  --status-complete: var(--ongoing, #5faf5f);
-  --status-aborted: #ffaf5f;
-  --status-error: var(--error, #d75f5f);
-  --review-mode: #ffaf00;
-  --collab-badge: #5f87d7;
-  --reasoning-text: var(--text-dim, #808080);
+  --icon-exec: var(--icon-bash);
+  --icon-mcp: #a888e0;
+  --icon-web: #3794ff;
+  --icon-image: #b180d7;
+  --icon-patch: var(--icon-git);
+  --token-input: #6f9fc4;
+  --token-cached: #6e6e6e;
+  --token-output: #89d185;
+  --token-reasoning: #b180d7;
+  --status-complete: var(--ongoing);
+  --status-aborted: #cca700;
+  --status-error: var(--error);
+  --review-mode: #cca700;
+  --collab-badge: #6f9fd8;
+  --reasoning-text: var(--text-dim);
+  /* Diff rows: pale rows pair with the saturated fg in --success / --error. */
+  --diff-add: #3a5a3a;
+  --diff-del: #5a3a3a;
+  /* Referenced without a definition in older rules; defining them here keeps
+     every colour token in one place. */
+  --success: #89d185;
+  --warning: #cca700;
 }
 
 /* Sidebar tree */
@@ -2916,12 +2744,19 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
+  padding: 8px 8px 4px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
   cursor: pointer;
   user-select: none;
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.sidebar-tree__group:first-child .sidebar-tree__group-header {
+  margin-top: 0;
+  border-top: 0;
 }
 .sidebar-tree__group-header:hover {
   background: var(--bg-hover);
@@ -2943,19 +2778,21 @@ body {
   padding: 0 5px;
   font-size: 11px;
 }
+/* Compact row: the display name takes the left, everything metadata-ish is
+   pushed right by the `margin-left: auto` on the timestamp. */
 .sidebar-tree__session {
   display: flex;
   flex-direction: column;
-  padding: 5px 12px 5px 20px;
+  padding: 4px 10px 4px 16px;
   cursor: pointer;
-  border-left: 2px solid transparent;
+  line-height: 1.4;
 }
 .sidebar-tree__session:hover {
   background: var(--bg-hover);
 }
+/* Flat filled block, like the reference list — no accent rail. */
 .sidebar-tree__session--selected {
-  background: var(--bg-selected, #1e2a3a);
-  border-left-color: var(--accent);
+  background: var(--bg-selected, #37373d);
 }
 .sidebar-tree__session-row {
   position: relative;
@@ -2969,7 +2806,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--text-bright);
+  color: var(--text-primary);
   flex: 1;
   min-width: 0;
 }
@@ -2981,18 +2818,24 @@ body {
   accent-color: var(--accent);
   cursor: pointer;
 }
+/* Ongoing sessions keep a faint green wash; the animated dots in the row carry
+   the rest of the signal now that selection is a flat filled block. */
 .sidebar-tree__session--ongoing {
-  border-left-color: var(--ongoing);
+  background: color-mix(in srgb, var(--ongoing) 6%, transparent);
+}
+.sidebar-tree__session--ongoing:hover {
+  background: color-mix(in srgb, var(--ongoing) 12%, transparent);
 }
 .sidebar-tree__time {
+  margin-left: auto;
   font-size: 11px;
-  color: var(--text-dim);
+  color: var(--text-muted);
   white-space: nowrap;
   flex-shrink: 0;
 }
 .sidebar-tree__size {
   font-size: 11px;
-  color: var(--text-dim);
+  color: var(--text-muted);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -3126,7 +2969,7 @@ body {
 }
 .session-group-toggle__button--active,
 .session-group-toggle__button--active:hover {
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
 }
 .session-group-toggle--compact .session-group-toggle__button {
@@ -3170,11 +3013,11 @@ body {
 }
 .picker__filter-btn--active {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 .picker__filter-btn--active:hover {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 .picker__search {
   width: 100%;
@@ -3197,6 +3040,15 @@ body {
   flex: 1;
   overflow-y: auto;
   padding: 8px 0;
+}
+/* Keep the session rows on the same centered reading column as the transcript,
+   while leaving the scroll container itself full width so the scrollbar stays
+   at the window edge. */
+.picker__group-header,
+.picker__session {
+  max-width: var(--reading-width);
+  margin-left: auto;
+  margin-right: auto;
 }
 .picker__group-header {
   padding: 8px 16px 4px;
@@ -3225,11 +3077,11 @@ body {
 }
 .picker__session--ongoing {
   border-left-color: var(--ongoing);
-  background: rgba(95, 175, 0, 0.06);
+  background: color-mix(in srgb, var(--ongoing) 6%, transparent);
 }
 .picker__session--ongoing.picker__session--selected {
   border-left-color: var(--ongoing);
-  background: rgba(95, 175, 0, 0.12);
+  background: color-mix(in srgb, var(--ongoing) 12%, transparent);
 }
 .picker__session-top {
   display: flex;
@@ -3259,7 +3111,7 @@ body {
   gap: 5px;
   padding: 1px 8px;
   border-radius: 3px;
-  background: rgba(95, 175, 0, 0.2);
+  background: color-mix(in srgb, var(--ongoing) 20%, transparent);
   color: var(--ongoing);
   font-size: 10px;
   font-weight: 700;
@@ -3281,7 +3133,7 @@ body {
 .picker__session-branch {
   font-size: 10px;
   color: var(--git-branch);
-  background: rgba(175, 95, 255, 0.12);
+  background: color-mix(in srgb, var(--git-branch) 12%, transparent);
   padding: 1px 5px;
   border-radius: 3px;
 }
@@ -3317,7 +3169,9 @@ body {
 .turn-list {
   padding: 4px 0;
 }
-.turn-list__turn {
+/* Separator for the compact row-based turn list (the chat view uses the card
+   rule in the "Message Item" section instead). */
+.turn-list__turn:not(:last-child) {
   border-bottom: 1px solid var(--border);
 }
 .turn-list__row {
@@ -3339,7 +3193,7 @@ body {
   border-left-color: var(--text-dim);
 }
 .turn-list__turn--selected .turn-list__row--user {
-  background: var(--bg-selected, #1e2a3a);
+  background: var(--bg-selected);
 }
 .turn-list__turn--selected .turn-list__row--agent {
   background: var(--bg-elevated);
@@ -3441,7 +3295,7 @@ body {
 }
 .turn-list__badge--collab {
   background: var(--collab-badge);
-  color: #fff;
+  color: var(--on-accent);
 }
 .turn-list__empty {
   padding: 2rem;
@@ -3463,7 +3317,7 @@ body {
   padding: 1rem;
 }
 .turn-detail__content {
-  max-width: 900px;
+  max-width: var(--reading-width);
   margin: 0 auto;
   min-width: 0;
 }
@@ -3489,7 +3343,11 @@ body {
   color: var(--text-dim);
 }
 .turn-detail__section {
-  margin-bottom: 1.2rem;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card, 6px);
+  background: var(--bg-surface);
 }
 .turn-detail__section-label {
   font-size: 12px;
@@ -3553,11 +3411,11 @@ body {
   margin-top: 1rem;
 }
 .turn-detail__collab-spawn {
-  border: 1px solid var(--collab-badge, #5f87d7);
+  border: 1px solid var(--collab-badge);
   border-radius: 4px;
   padding: 8px 10px;
   margin-bottom: 8px;
-  background: rgba(95, 135, 215, 0.06);
+  background: color-mix(in srgb, var(--collab-badge) 6%, transparent);
 }
 .turn-detail__collab-header {
   display: flex;
@@ -3577,30 +3435,30 @@ body {
 .turn-detail__collab-btn {
   margin-left: auto;
   background: none;
-  border: 1px solid var(--collab-badge, #5f87d7);
+  border: 1px solid var(--collab-badge);
   border-radius: 3px;
-  color: var(--collab-badge, #5f87d7);
+  color: var(--collab-badge);
   font-size: 12px;
   padding: 1px 6px;
   cursor: pointer;
   font-family: inherit;
 }
 .turn-detail__collab-btn:hover {
-  background: rgba(95, 135, 215, 0.15);
+  background: color-mix(in srgb, var(--collab-badge) 15%, transparent);
 }
 .turn-detail__collab-prompt {
   white-space: pre-wrap;
   font-size: 13px;
   color: var(--text-dim);
   margin: 4px 0 0;
-  border-top: 1px solid rgba(95, 135, 215, 0.2);
+  border-top: 1px solid color-mix(in srgb, var(--collab-badge) 20%, transparent);
   padding-top: 6px;
 }
 
 /* Tool calls */
 .tool-call {
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-card);
   margin-bottom: 6px;
   overflow: hidden;
 }
@@ -3610,7 +3468,7 @@ body {
   gap: 8px;
   padding: 6px 10px;
   cursor: pointer;
-  background: var(--bg-panel);
+  background: var(--bg-elevated);
   user-select: none;
 }
 .tool-call__header:hover {
@@ -3802,20 +3660,20 @@ body {
   color: var(--text-dim);
 }
 .tool-call__diff-line--removed {
-  background: rgba(215, 95, 95, 0.15);
-  color: #d75f5f;
+  background: var(--diff-del);
+  color: var(--error);
 }
 .tool-call__diff-line--added {
-  background: rgba(95, 175, 95, 0.15);
-  color: #5faf5f;
+  background: var(--diff-add);
+  color: var(--success);
 }
 /* Intra-line word-level change: a stronger tint over the exact changed span. */
 .tool-call__diff-line--removed .tool-call__diff-word {
-  background: rgba(215, 95, 95, 0.4);
+  background: color-mix(in srgb, var(--error) 40%, transparent);
   border-radius: 2px;
 }
 .tool-call__diff-line--added .tool-call__diff-word {
-  background: rgba(95, 175, 95, 0.4);
+  background: color-mix(in srgb, var(--success) 40%, transparent);
   border-radius: 2px;
 }
 .tool-call__diff-marker {
@@ -4028,7 +3886,7 @@ body {
   color: var(--icon-git);
 }
 .tool-call--image .tool-call__icon {
-  color: var(--icon-image, #af5fff);
+  color: var(--icon-image);
 }
 .tool-call--collab .tool-call__icon {
   color: var(--collab-badge);
@@ -4052,11 +3910,11 @@ body {
 }
 /* Input section gets a subtle blue-left accent */
 .tool-call__section--input .tool-call__section-title {
-  color: var(--token-input, #5f87af);
+  color: var(--token-input);
 }
 /* Output/Result section gets a subtle green-left accent */
 .tool-call__section--output .tool-call__section-title {
-  color: var(--token-output, #5faf5f);
+  color: var(--token-output);
 }
 .tool-call__json {
   overflow-x: auto;
@@ -4120,7 +3978,7 @@ body {
   background: var(--bg-hover);
 }
 .message-copy-button--copied {
-  color: var(--success, #5faf5f);
+  color: var(--success);
 }
 .message-copy-button:focus-visible {
   outline: 2px solid var(--accent);
@@ -4338,7 +4196,7 @@ body {
   border: 1px solid var(--collab-badge);
   border-radius: 4px;
   background: var(--bg-elevated);
-  color: var(--text);
+  color: var(--text-primary);
   cursor: pointer;
   font-size: 12px;
 }
@@ -4415,7 +4273,7 @@ body {
 }
 .provider-filter__chip--active,
 .provider-filter__chip--active:hover {
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
   border-color: var(--accent);
 }

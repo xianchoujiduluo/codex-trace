@@ -1,51 +1,72 @@
 // Theme constants — dark theme colors for codex-trace.
+//
+// Mirror of the `:root` palette in src/styles/global.css. Keep the two in sync:
+// components that pass a colour to react-syntax-highlighter or set an inline
+// style must read it from here, since inline styles can't use CSS variables.
+//
+// src/styles/global.test.ts guards the CSS side (every `var(--x)` it uses must
+// be defined); this file is the JS side of the same palette.
 
 export const colors = {
   // Background
-  bg: "#1a1a2e",
-  bgSurface: "#16213e",
-  bgElevated: "#222244",
-  bgHover: "#2a2a4a",
+  bg: "#1e1e1e",
+  bgPanel: "#181818",
+  bgSurface: "#252526",
+  bgElevated: "#2d2d30",
+  bgHover: "#2a2d2e",
 
   // Text hierarchy
-  textPrimary: "#d0d0d0",
-  textSecondary: "#8a8a8a",
-  textDim: "#767676",
-  textMuted: "#585858",
+  textPrimary: "#cccccc",
+  textSecondary: "#9d9d9d",
+  textDim: "#858585",
+  textMuted: "#6e6e6e",
 
   // Accents
-  accent: "#5fafff",
-  error: "#ff0000",
-  info: "#5f87ff",
+  accent: "#3794ff",
+  error: "#f14c4c",
+  info: "#3794ff",
 
   // Surfaces
-  border: "#5f5f87",
+  border: "#3c3c3c",
 
   // Model family (GPT variants)
-  modelGpt4: "#5fafff",
-  modelGpt5: "#87d787",
-  modelO: "#ff8700",
+  modelGpt4: "#3794ff",
+  modelGpt5: "#89d185",
+  modelO: "#cca700",
 
   // Token highlight
-  tokenHigh: "#ff8700",
+  tokenHigh: "#cca700",
 
   // Ongoing indicator
-  ongoing: "#5faf00",
+  ongoing: "#89d185",
 
   // Context usage thresholds
-  contextOk: "#87d787",
-  contextWarn: "#ff8700",
-  contextCrit: "#ff0000",
+  contextOk: "#89d185",
+  contextWarn: "#cca700",
+  contextCrit: "#f14c4c",
 
   // Tool category colors
-  toolExec: "#767676",
-  toolPatch: "#5faf5f",
-  toolMcp: "#af87ff",
-  toolWeb: "#5f87ff",
-  toolImage: "#af5fff",
+  toolExec: "#858585",
+  toolPatch: "#89d185",
+  toolMcp: "#a888e0",
+  toolWeb: "#3794ff",
+  toolImage: "#b180d7",
 
   // Collab
-  collab: "#5f87d7",
+  collab: "#6f9fd8",
+} as const;
+
+/**
+ * Syntax-highlighting colours for `react-syntax-highlighter`.
+ *
+ * The bundled `oneDark` theme is kept for token colours (its hues already match a
+ * VS Code-ish palette), but its container background `#282c34` is blue-leaning and
+ * clashes with the neutral gray surfaces. Overriding just the frame reuses the
+ * theme instead of shipping a full custom one.
+ */
+export const syntaxHighlighterStyle = {
+  background: colors.bgElevated,
+  color: colors.textPrimary,
 } as const;
 
 export function getModelColor(model: string): string {
