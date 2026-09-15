@@ -1,4 +1,12 @@
-import { useState, useCallback, useEffect, useMemo, useRef, type CSSProperties } from "react";
+import {
+  useState,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type CSSProperties,
+} from "react";
 import type { CodexTurn, SessionPagination } from "../../shared/types";
 import { displayedTokenTotal, formatDuration, formatTokens } from "../../shared/format";
 import { formatExactTime } from "../lib/format";
@@ -64,6 +72,7 @@ export function TurnList({
   // Tool calls and reasoning are the noisy part of a turn, so they start hidden
   // and each assistant message carries its own toggle for them.
   const [openActivity, setOpenActivity] = useState<Set<number>>(new Set());
+  const previouslyOpenActivity = useRef<Set<number>>(new Set());
 
   const toggleActivity = useCallback((i: number) => {
     setOpenActivity((prev) => {
@@ -73,6 +82,20 @@ export function TurnList({
       return next;
     });
   }, []);
+
+  // A timeline is often taller than the viewport, so the tool calls it just
+  // revealed can land entirely below the fold and the button reads as inert.
+  // Jump the scroll container to the block that was opened — only on open, since
+  // collapsing should not scroll away from the line the user just dismissed.
+  // `useLayoutEffect` so the jump lands with the block rather than a frame later.
+  useLayoutEffect(() => {
+    const opened = [...openActivity].find((i) => !previouslyOpenActivity.current.has(i));
+    previouslyOpenActivity.current = openActivity;
+    if (opened === undefined) return;
+    listRef.current
+      ?.querySelector(`[data-turn-index="${opened}"] .activity`)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [openActivity, listRef]);
 
   const scrollToTurn = (index: number) => {
     listRef.current
@@ -274,9 +297,7 @@ export function TurnList({
                   </div>
                 )}
 
-                {activityOpen && (
-                  <ActivityTimeline turn={turn} onOpenDetail={() => onSelectTurn(i)} />
-                )}
+                {activityOpen && <ActivityTimeline turn={turn} />}
 
                 {(turn.turn_tokens || turn.duration_ms !== null) && (
                   <div className="message__stats">

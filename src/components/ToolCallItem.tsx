@@ -459,7 +459,13 @@ export function ToolCallItem({
   );
 }
 
-function ToolCallBody({ tool, popout = false }: { tool: CodexToolCall; popout?: boolean }) {
+/**
+ * Everything behind a tool call's chevron: command/input, diff, output.
+ *
+ * Exported because the chat transcript expands a tool line into this same body
+ * instead of navigating away to the turn detail.
+ */
+export function ToolCallBody({ tool, popout = false }: { tool: CodexToolCall; popout?: boolean }) {
   const cls = popout ? "tool-call__body tool-call__body--popout" : "tool-call__body";
   const patchFiles = useMemo(() => {
     if (tool.kind !== "patch_apply") return null;

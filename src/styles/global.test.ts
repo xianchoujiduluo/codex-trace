@@ -139,6 +139,21 @@ describe("global.css layout invariants", () => {
     expect(bar).not.toMatch(/transition:[^;]*\b(width|height)\b/);
   });
 
+  it("tints each tool line's body into the timeline's indent", () => {
+    // The tool body sits under an `.activity-line`, not under a `ToolCallItem`
+    // header, so the body's own top border divides it from the wrong thing and
+    // the left rule is what ties it to the line that opened it.
+    const body = /(?:^|\n)\.activity-tool-body\s*\{([^}]*)\}/.exec(withoutComments)?.[1] ?? "";
+    expect(body).toMatch(/margin:[^;]*26px/);
+    expect(body).toMatch(/border-left:\s*2px solid var\(--border\)/);
+
+    const nested =
+      /(?:^|\n)[^{}\n]*\.activity-tool-body \.tool-call__body[^{]*\{([^}]*)\}/.exec(
+        withoutComments,
+      )?.[1] ?? "";
+    expect(nested).toMatch(/border-top:\s*none/);
+  });
+
   it("keeps one markdown class for every rendered-markdown surface", () => {
     // Chat transcript, turn detail, worker panel and complementary items all
     // render the same markdown; a per-surface copy drifts (the transcript was

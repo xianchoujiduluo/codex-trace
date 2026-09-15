@@ -1093,6 +1093,28 @@ body {
   font-style: italic;
 }
 
+/* The row stays highlighted while its body is open, so the body below it still
+   reads as belonging to this line rather than to the next one. */
+.activity-line--open {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+/* The body a tool line expands into. Indented and rule-marked the same way as
+   `.activity-line__thinking-text`, so both kinds of activity read as belonging to
+   the line above them. The body's own top border is dropped: it exists to divide
+   it from a `ToolCallItem` header, which is not what sits above it here. */
+.activity-tool-body {
+  margin: 2px 0 6px 26px;
+  padding-left: 10px;
+  border-left: 2px solid var(--border);
+}
+
+.activity-tool-body .tool-call__body {
+  padding: 0;
+  border-top: none;
+}
+
 .activity-line__hint {
   margin-left: auto;
   font-size: 11px;

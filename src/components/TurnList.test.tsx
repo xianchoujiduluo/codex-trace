@@ -243,6 +243,40 @@ describe("TurnList", () => {
     expect(screen.queryByText("Shell")).not.toBeInTheDocument();
   });
 
+  it("brings the tool calls into view when the activity toggle opens them", () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    render(
+      <TurnList
+        turns={[makeTurn({ tool_calls: [EXEC_TOOL] })]}
+        selectedIndex={-1}
+        onSelectTurn={vi.fn()}
+      />,
+    );
+    scrollIntoView.mockClear();
+
+    fireEvent.click(screen.getByText("Show activity (1)"));
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+  });
+
+  it("leaves the scroll alone when the activity toggle closes the timeline", () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    render(
+      <TurnList
+        turns={[makeTurn({ tool_calls: [EXEC_TOOL] })]}
+        selectedIndex={-1}
+        onSelectTurn={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Show activity (1)"));
+    scrollIntoView.mockClear();
+    fireEvent.click(screen.getByText("Hide activity (1)"));
+    // Closing must not scroll away from the message the toggle sits on.
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
   it("counts every tool call in the activity toggle label", () => {
     const tool2 = { ...EXEC_TOOL, call_id: "c2" };
     render(

@@ -1,11 +1,9 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { CodexToolCall, CodexTurn } from "../../shared/types";
-import { kindIcon } from "./ToolCallItem";
+import { kindIcon, ToolCallBody } from "./ToolCallItem";
 
 interface ActivityTimelineProps {
   turn: CodexTurn;
-  /** Called when a tool line is clicked — opens the full turn detail. */
-  onOpenDetail: () => void;
 }
 
 interface ToolActivity {
@@ -142,10 +140,32 @@ export function activityItems(turn: CodexTurn): ActivityItem[] {
  * of a chat client: one muted line per tool call (icon, kind, target summary,
  * patch stats, failure state) and per reasoning block, in stream order.
  */
-export function ActivityTimeline({ turn, onOpenDetail }: ActivityTimelineProps) {
+export function ActivityTimeline({ turn }: ActivityTimelineProps) {
   const [expandedThinking, setExpandedThinking] = useState<Set<number>>(new Set());
+  // Keyed by index rather than `call_id`: older turns can carry tools without one
+  // (the line itself already falls back to `tool-${i}`), and the index is what
+  // identifies the line in this render either way.
+  const [expandedTools, setExpandedTools] = useState<Set<number>>(new Set());
+  const activityRef = useRef<HTMLDivElement>(null);
+  const previouslyExpandedTools = useRef<Set<number>>(new Set());
 
   const items = activityItems(turn);
+
+  // A tool body is routinely taller than the viewport, especially inside the
+  // transcript's scrolling column, so revealing one without scrolling leaves the
+  // click feeling inert — you see the summary you clicked and nothing else.
+  // Scoped to the body that was just opened rather than "any expanded body":
+  // collapsing one while another stands would otherwise scroll to the survivor.
+  // `useLayoutEffect` runs before paint, so the jump lands with the body rather
+  // than a frame after the old scroll position.
+  useLayoutEffect(() => {
+    const opened = [...expandedTools].find((i) => !previouslyExpandedTools.current.has(i));
+    previouslyExpandedTools.current = expandedTools;
+    if (opened === undefined) return;
+    activityRef.current
+      ?.querySelector(`[data-tool-index="${opened}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [expandedTools]);
 
   if (items.length === 0) return null;
 
@@ -158,8 +178,17 @@ export function ActivityTimeline({ turn, onOpenDetail }: ActivityTimelineProps) 
     });
   };
 
+  const toggleTool = (index: number) => {
+    setExpandedTools((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  };
+
   return (
-    <div className="activity">
+    <div className="activity" ref={activityRef}>
       {items.map((item, i) => {
         if (item.type === "thinking") {
           const expanded = expandedThinking.has(item.order);
@@ -185,27 +214,36 @@ export function ActivityTimeline({ turn, onOpenDetail }: ActivityTimelineProps) 
 
         const failed = item.tool.status === "failed";
         const stats = patchStatLine(item.tool);
+        const expanded = expandedTools.has(i);
         return (
-          <div
-            key={item.tool.call_id || `tool-${i}`}
-            className="activity-line"
-            onClick={onOpenDetail}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") onOpenDetail();
-            }}
-          >
-            <span className="activity-line__icon">{kindIcon(item.tool.kind, failed)}</span>
-            <span className="activity-line__label">{kindLabel(item.tool)}</span>
-            <span className="activity-line__summary">{toolSummary(item.tool)}</span>
-            {stats && (
-              <span className="activity-line__diff">
-                <span className="activity-line__diff-add">{stats.split(" ")[0]}</span>{" "}
-                <span className="activity-line__diff-del">{stats.split(" ")[1]}</span>
-              </span>
+          <div key={item.tool.call_id || `tool-${i}`} className="activity__item">
+            <div
+              className={`activity-line${expanded ? " activity-line--open" : ""}`}
+              onClick={() => toggleTool(i)}
+              role="button"
+              tabIndex={0}
+              aria-expanded={expanded}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") toggleTool(i);
+              }}
+            >
+              <span className="activity-line__icon">{kindIcon(item.tool.kind, failed)}</span>
+              <span className="activity-line__label">{kindLabel(item.tool)}</span>
+              <span className="activity-line__summary">{toolSummary(item.tool)}</span>
+              {stats && (
+                <span className="activity-line__diff">
+                  <span className="activity-line__diff-add">{stats.split(" ")[0]}</span>{" "}
+                  <span className="activity-line__diff-del">{stats.split(" ")[1]}</span>
+                </span>
+              )}
+              {failed && <span className="activity-line__failed">failed</span>}
+              <span className="activity-line__hint">{expanded ? "hide" : "show"}</span>
+            </div>
+            {expanded && (
+              <div className="activity-tool-body" data-tool-index={i}>
+                <ToolCallBody tool={item.tool} />
+              </div>
             )}
-            {failed && <span className="activity-line__failed">failed</span>}
           </div>
         );
       })}
