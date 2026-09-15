@@ -113,7 +113,7 @@ export function WorkerPanel({
                 {turn.user_message && (
                   <div className="codex-worker-panel__message">
                     <div className="codex-worker-panel__label">User</div>
-                    <div className="turn-detail__markdown">
+                    <div className="markdown-body">
                       <MarkdownRenderer content={turn.user_message} />
                     </div>
                   </div>
@@ -131,7 +131,7 @@ export function WorkerPanel({
                         </span>
                       </div>
                     )}
-                    <div className="turn-detail__markdown">
+                    <div className="markdown-body">
                       <MarkdownRenderer content={message.text} />
                     </div>
                   </div>
@@ -147,7 +147,7 @@ export function WorkerPanel({
                         </span>
                       </div>
                     )}
-                    <div className="turn-detail__markdown">
+                    <div className="markdown-body">
                       <MarkdownRenderer content={finalAnswer.text} />
                     </div>
                   </div>

@@ -26,7 +26,7 @@ export function ComplementaryItem({ msg }: ComplementaryItemProps) {
         )}
       </div>
       <div className="complementary-item__body">
-        <div className="turn-detail__markdown">
+        <div className="markdown-body">
           <MarkdownRenderer content={msg.text} />
         </div>
       </div>

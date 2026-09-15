@@ -314,7 +314,7 @@ export function TurnDetail({
                     </span>
                   )}
                 </div>
-                <div className="turn-detail__markdown">
+                <div className="markdown-body">
                   <MarkdownRenderer content={visibleFinalAnswer.text} />
                 </div>
               </div>

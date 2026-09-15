@@ -135,6 +135,30 @@ describe("TurnList", () => {
     expect(userMessage).not.toHaveClass("message__content--collapsed");
   });
 
+  it("renders message prose as markdown rather than raw text", () => {
+    const { container } = render(
+      <TurnList
+        turns={[
+          makeTurn({
+            user_message: "# Heading\n\n- item one\n- item two",
+            final_answer: "**bold** reply",
+            agent_messages: [{ ...FINAL_MSG, text: "**bold** reply" }],
+          }),
+        ]}
+        selectedIndex={-1}
+        onSelectTurn={vi.fn()}
+      />,
+    );
+
+    const userContent = container.querySelector(".message--user .message__content")!;
+    expect(userContent.querySelector("h1")).toHaveTextContent("Heading");
+    expect(userContent.querySelectorAll("li")).toHaveLength(2);
+
+    const agentContent = container.querySelector(".message--claude .message__content")!;
+    expect(agentContent.querySelector("strong")).toHaveTextContent("bold");
+    expect(agentContent.textContent).not.toContain("**");
+  });
+
   it("marks a turn that spawned a subagent", () => {
     render(
       <TurnList
@@ -310,8 +334,11 @@ describe("TurnList", () => {
       />,
     );
 
+    // The preview is markdown now, so the error style rides on the wrapper.
     expect(
-      screen.getByText("exceeded retry limit, last status: 429 Too Many Requests"),
+      screen
+        .getByText("exceeded retry limit, last status: 429 Too Many Requests")
+        .closest(".message__content"),
     ).toHaveClass("message__content--error");
     expect(screen.getByText("Detail", { selector: "button" })).toBeInTheDocument();
   });

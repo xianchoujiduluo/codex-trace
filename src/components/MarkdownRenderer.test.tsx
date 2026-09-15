@@ -50,4 +50,20 @@ describe("MarkdownRenderer", () => {
     const { container } = render(<MarkdownRenderer content={"```js\nconsole.log('hi')\n```"} />);
     expect(container.querySelector('[data-language="js"]')).toBeInTheDocument();
   });
+
+  it("folds a single newline into the paragraph by default", () => {
+    const { container } = render(<MarkdownRenderer content={"line one\nline two"} />);
+    expect(container.querySelectorAll("p")).toHaveLength(1);
+  });
+
+  it("keeps a single newline as a break when breaks is set", () => {
+    const { container } = render(<MarkdownRenderer content={"line one\nline two"} breaks />);
+    expect(container.querySelector("br")).toBeInTheDocument();
+  });
+
+  it("still renders markdown syntax when breaks is set", () => {
+    const { container } = render(<MarkdownRenderer content={"# Heading\n\n**bold**"} breaks />);
+    expect(container.querySelector("h1")).toBeInTheDocument();
+    expect(container.querySelector("strong")).toBeInTheDocument();
+  });
 });

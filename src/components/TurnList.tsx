@@ -9,6 +9,7 @@ import { BackIcon, CodexIcon, ForwardIcon, TokensIcon, DurationIcon, ToolsIcon }
 import { tokenBreakdownTitle } from "./TokenBar";
 import { SubagentMarker } from "./SubagentMarker";
 import { ActivityTimeline, activityItems } from "./ActivityTimeline";
+import { MarkdownRenderer } from "./MarkdownRenderer";
 import { matchesTurn } from "../lib/turnSearch";
 import { minimapLayout } from "../lib/minimap";
 interface TurnListProps {
@@ -191,7 +192,13 @@ export function TurnList({
                   if (e.key === "Enter") onSelectTurn(i);
                 }}
               >
-                {userMsg && <div className="message__content">{userMsg}</div>}
+                {userMsg && (
+                  <div className="message__content">
+                    <div className="markdown-body">
+                      <MarkdownRenderer content={userMsg} breaks />
+                    </div>
+                  </div>
+                )}
                 {userTs && (
                   <span className="message__timestamp message__timestamp--user">{userTs}</span>
                 )}
@@ -261,7 +268,9 @@ export function TurnList({
                   <div
                     className={`message__content${turn.error ? " message__content--error" : ""}`}
                   >
-                    {agentPreview}
+                    <div className="markdown-body">
+                      <MarkdownRenderer content={agentPreview} breaks />
+                    </div>
                   </div>
                 )}
 

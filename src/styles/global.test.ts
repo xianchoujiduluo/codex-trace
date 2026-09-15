@@ -138,4 +138,17 @@ describe("global.css layout invariants", () => {
     expect(bar).toMatch(/transition:[^;]*transform/);
     expect(bar).not.toMatch(/transition:[^;]*\b(width|height)\b/);
   });
+
+  it("keeps one markdown class for every rendered-markdown surface", () => {
+    // Chat transcript, turn detail, worker panel and complementary items all
+    // render the same markdown; a per-surface copy drifts (the transcript was
+    // missing the rules entirely while its class was the detail's).
+    expect(withoutComments).toContain(".markdown-body {");
+    expect(withoutComments).not.toMatch(/\.turn-detail__markdown\b/);
+
+    // The transcript wraps markdown in `pre-wrap` text containers, so the
+    // shared class has to opt back out or every source newline doubles up.
+    const body = /(?:^|\n)\.markdown-body\s*\{([^}]*)\}/.exec(withoutComments)?.[1] ?? "";
+    expect(body).toMatch(/white-space:\s*normal/);
+  });
 });
