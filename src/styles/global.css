@@ -1163,10 +1163,20 @@ body {
   font-weight: 600;
 }
 
+/* Sits right after the role label, ahead of the activity/detail buttons, so the
+   reply's exact time is read before its actions. It used to be pushed to the far
+   right with `margin-left: auto`, which put it on the same visual line as the
+   user bubble's own timestamp and made the two easy to confuse. */
 .message__timestamp {
   font-size: 11px;
   color: var(--text-secondary);
-  margin-left: auto;
+}
+
+/* Same size and colour as the timestamp it trails, a step dimmer so the exact
+   time stays the prominent half of the pair. */
+.message__timestamp-duration {
+  color: var(--text-muted);
+  margin-left: 4px;
 }
 
 .message__detail-btn {

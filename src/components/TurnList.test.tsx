@@ -8,6 +8,7 @@ import type {
   TokenUsage,
 } from "../../shared/types";
 import { TurnList } from "./TurnList";
+import { formatExactTime } from "../lib/format";
 import { MAX_TICK_PITCH, minimapLayout } from "../lib/minimap";
 
 const TOKEN_INFO: TokenInfo = {
@@ -261,6 +262,36 @@ describe("TurnList", () => {
   it("shows duration stat when duration_ms is set", () => {
     render(<TurnList turns={[makeTurn()]} selectedIndex={-1} onSelectTurn={vi.fn()} />);
     expect(screen.getByText("1m")).toBeInTheDocument();
+  });
+
+  it("puts the reply timestamp before the header actions, with the seconds beside it", () => {
+    const { container } = render(
+      <TurnList
+        turns={[makeTurn({ duration_ms: 3000 })]}
+        selectedIndex={-1}
+        onSelectTurn={vi.fn()}
+      />,
+    );
+
+    const header = container.querySelector(".message--claude .message__header")!;
+    const timestamp = header.querySelector(".message__timestamp")!;
+    const detail = header.querySelector(".message__detail-btn")!;
+
+    // The time reads before the actions rather than being pushed to the far edge.
+    expect(timestamp.compareDocumentPosition(detail)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(timestamp).toHaveTextContent(formatExactTime(new Date(1745661660 * 1000).toISOString()));
+    expect(container.querySelector(".message__timestamp-duration")).toHaveTextContent("(3s)");
+  });
+
+  it("omits the execution seconds when the turn has no duration", () => {
+    render(
+      <TurnList
+        turns={[makeTurn({ duration_ms: null, turn_tokens: null })]}
+        selectedIndex={-1}
+        onSelectTurn={vi.fn()}
+      />,
+    );
+    expect(document.querySelector(".message__timestamp-duration")).not.toBeInTheDocument();
   });
 
   it("shows a terminal turn error as the Codex message preview", () => {

@@ -30,6 +30,17 @@ function statusIcon(status: CodexTurn["status"]): string {
   return "!";
 }
 
+/**
+ * Whole seconds a reply took, shown in parentheses beside its timestamp.
+ *
+ * Deliberately rawer than `formatDuration` ("1m 2s"), which still carries the
+ * humanised value on the stats line below — this one answers "how many seconds
+ * was that" at a glance.
+ */
+function executionSeconds(ms: number): string {
+  return `${Math.round(ms / 1000)}s`;
+}
+
 export function TurnList({
   turns,
   selectedIndex,
@@ -207,6 +218,18 @@ export function TurnList({
                   <span className="message__role message__role--claude">{providerName}</span>
                   <SubagentMarker count={subagentCount} active={usesSubagents} />
                   {turn.status === "ongoing" && <OngoingDots />}
+                  {/* The reply time leads the header rather than trailing it, so
+                     the eye picks it up before the action buttons. */}
+                  {agentTs && (
+                    <span className="message__timestamp">
+                      {agentTs}
+                      {turn.duration_ms !== null && (
+                        <span className="message__timestamp-duration">
+                          ({executionSeconds(turn.duration_ms)})
+                        </span>
+                      )}
+                    </span>
+                  )}
                   {activityCount > 0 && (
                     <button
                       type="button"
@@ -232,7 +255,6 @@ export function TurnList({
                       Detail <ForwardIcon />
                     </button>
                   )}
-                  {agentTs && <span className="message__timestamp">{agentTs}</span>}
                 </div>
 
                 {agentPreview && (
