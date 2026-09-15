@@ -817,12 +817,18 @@ body {
   height: 2px;
   border-radius: 1px;
   background: var(--text-muted);
-  transition: background 0.12s;
+  /* `transform` rather than width/height so the settle never reflows the rail:
+     the ticks are laid out purely by `--tick-pitch`, and a box-growing hover
+     would nudge the neighbours it is measured against. */
+  transition:
+    background 0.12s,
+    transform 0.12s;
 }
 
 .turn-minimap__tick:hover .turn-minimap__bar,
 .turn-minimap__tick:focus-visible .turn-minimap__bar {
   background: var(--text-secondary);
+  transform: scale(1.35, 2);
 }
 
 .turn-minimap__tick--active .turn-minimap__bar,

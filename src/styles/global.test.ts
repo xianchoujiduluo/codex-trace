@@ -122,4 +122,20 @@ describe("global.css layout invariants", () => {
     const rule = /\.sidebar-tree__group-header\s*\{([^}]*)\}/.exec(withoutComments)?.[1] ?? "";
     expect(rule).toMatch(/border-top:\s*1px solid var\(--border\)/);
   });
+
+  it("scales the hovered minimap bar with a transform instead of resizing it", () => {
+    // The hover state shares one rule with `:focus-visible`, so match the whole
+    // selector list rather than a single selector.
+    const hover =
+      /(?:^|\n)[^{}\n]*\.turn-minimap__tick:hover \.turn-minimap__bar[^{]*\{([^}]*)\}/.exec(
+        withoutComments,
+      )?.[1] ?? "";
+    expect(hover).toMatch(/transform:\s*scale\(/);
+
+    // Resizing the bar would reflow the rail it is measured against, so the
+    // hover state must not touch its box.
+    const bar = /\.turn-minimap__bar\s*\{([^}]*)\}/.exec(withoutComments)?.[1] ?? "";
+    expect(bar).toMatch(/transition:[^;]*transform/);
+    expect(bar).not.toMatch(/transition:[^;]*\b(width|height)\b/);
+  });
 });
