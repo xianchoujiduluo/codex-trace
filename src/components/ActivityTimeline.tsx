@@ -196,11 +196,20 @@ export function ActivityTimeline({ turn }: ActivityTimelineProps) {
             <div key={`thinking-${item.order}`} className="activity__item">
               <div
                 className="activity-line activity-line--thinking"
-                onClick={() => toggleThinking(item.order)}
+                onClick={(e) => {
+                  // The whole assistant message opens the turn detail, so the
+                  // line has to keep its own click to itself or every toggle
+                  // still lands in the detail view.
+                  e.stopPropagation();
+                  toggleThinking(item.order);
+                }}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") toggleThinking(item.order);
+                  if (e.key === "Enter") {
+                    e.stopPropagation();
+                    toggleThinking(item.order);
+                  }
                 }}
               >
                 <span className="activity-line__icon">{kindIcon("unknown", false)}</span>
@@ -219,12 +228,21 @@ export function ActivityTimeline({ turn }: ActivityTimelineProps) {
           <div key={item.tool.call_id || `tool-${i}`} className="activity__item">
             <div
               className={`activity-line${expanded ? " activity-line--open" : ""}`}
-              onClick={() => toggleTool(i)}
+              onClick={(e) => {
+                // The whole assistant message opens the turn detail, so the line
+                // must keep the click to itself — otherwise "expand here" still
+                // navigates away.
+                e.stopPropagation();
+                toggleTool(i);
+              }}
               role="button"
               tabIndex={0}
               aria-expanded={expanded}
               onKeyDown={(e) => {
-                if (e.key === "Enter") toggleTool(i);
+                if (e.key === "Enter") {
+                  e.stopPropagation();
+                  toggleTool(i);
+                }
               }}
             >
               <span className="activity-line__icon">{kindIcon(item.tool.kind, failed)}</span>

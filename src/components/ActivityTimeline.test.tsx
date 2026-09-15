@@ -184,6 +184,43 @@ describe("ActivityTimeline", () => {
     expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
+  it("keeps a tool line's click out of the message's own detail navigation", () => {
+    // Every assistant message in the transcript is itself a button that opens
+    // the turn detail, so a plain onClick here would bubble straight out of the
+    // timeline and navigate away — exactly what expanding in place is meant to
+    // avoid.
+    const onSelectTurn = vi.fn();
+    const { container } = render(
+      <div onClick={onSelectTurn}>
+        <ActivityTimeline turn={makeTurn({ tool_calls: [EXEC_TOOL], tool_call_orders: [0] })} />
+      </div>,
+    );
+
+    fireEvent.click(container.querySelector(".activity-line")!);
+    expect(container.querySelector(".activity-tool-body")).toBeInTheDocument();
+    expect(onSelectTurn).not.toHaveBeenCalled();
+  });
+
+  it("keeps a thinking line's click out of the message's own detail navigation", () => {
+    const onSelectTurn = vi.fn();
+    const reasoning: AgentMessage = {
+      text: "Need to inspect the parser first.",
+      phase: null,
+      timestamp: "",
+      is_reasoning: true,
+      order: 1,
+    };
+    const { container } = render(
+      <div onClick={onSelectTurn}>
+        <ActivityTimeline turn={makeTurn({ agent_messages: [reasoning] })} />
+      </div>,
+    );
+
+    fireEvent.click(container.querySelector(".activity-line")!);
+    expect(container.querySelector(".activity-line__thinking-text")).toBeInTheDocument();
+    expect(onSelectTurn).not.toHaveBeenCalled();
+  });
+
   it("renders thinking lines that expand to the reasoning text", () => {
     const reasoning: AgentMessage = {
       text: "Need to inspect the parser first.",
