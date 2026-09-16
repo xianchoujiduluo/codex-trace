@@ -556,7 +556,7 @@ mod tests {
         let active_content = concat!(
             r#"{"timestamp":"2026-08-18T12:00:00Z","type":"session_meta","payload":{"id":"active"}}"#,
             "\n",
-            r#"{"timestamp":"2026-08-18T12:00:01Z","type":"event_msg","payload":{"type":"task_started"}}"#,
+            r#"{"timestamp":"2026-08-18T12:00:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
             "\n",
         );
         std::fs::write(&active_path, active_content).unwrap();
@@ -565,9 +565,9 @@ mod tests {
             concat!(
                 r#"{"timestamp":"2026-08-18T12:00:00Z","type":"session_meta","payload":{"id":"completed"}}"#,
                 "\n",
-                r#"{"timestamp":"2026-08-18T12:00:01Z","type":"event_msg","payload":{"type":"task_started"}}"#,
+                r#"{"timestamp":"2026-08-18T12:00:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
                 "\n",
-                r#"{"timestamp":"2026-08-18T12:00:02Z","type":"event_msg","payload":{"type":"task_complete"}}"#,
+                r#"{"timestamp":"2026-08-18T12:00:02Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1"}}"#,
                 "\n",
             ),
         )
@@ -587,7 +587,7 @@ mod tests {
             .unwrap();
         writeln!(
             file,
-            r#"{{"timestamp":"2026-08-18T12:00:02Z","type":"event_msg","payload":{{"type":"task_complete"}}}}"#
+            r#"{{"timestamp":"2026-08-18T12:00:02Z","type":"event_msg","payload":{{"type":"task_complete","turn_id":"turn-1"}}}}"#
         )
         .unwrap();
 
@@ -622,7 +622,7 @@ mod tests {
             concat!(
                 r#"{"timestamp":"2026-08-18T12:00:00Z","type":"session_meta","payload":{"id":"status"}}"#,
                 "\n",
-                r#"{"timestamp":"2026-08-18T12:00:01Z","type":"event_msg","payload":{"type":"task_started"}}"#,
+                r#"{"timestamp":"2026-08-18T12:00:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
                 "\n",
             ),
         )
@@ -638,7 +638,7 @@ mod tests {
             .unwrap();
         writeln!(
             file,
-            r#"{{"timestamp":"2026-08-18T12:00:02Z","type":"event_msg","payload":{{"type":"task_complete"}}}}"#
+            r#"{{"timestamp":"2026-08-18T12:00:02Z","type":"event_msg","payload":{{"type":"task_complete","turn_id":"turn-1"}}}}"#
         )
         .unwrap();
 

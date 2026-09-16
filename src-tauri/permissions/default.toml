@@ -2,6 +2,7 @@
 description = "Default permissions for all codex-trace commands"
 permissions = [
   "allow-load-session",
+  "allow-get-session-status",
   "allow-watch-session",
   "allow-unwatch-session",
   "allow-list-sessions",
@@ -16,6 +17,11 @@ permissions = [
 identifier = "allow-load-session"
 description = "Allow loading a session file"
 commands.allow = ["load_session"]
+
+[[permission]]
+identifier = "allow-get-session-status"
+description = "Allow reading a session's activity status"
+commands.allow = ["get_session_status"]
 
 [[permission]]
 identifier = "allow-watch-session"

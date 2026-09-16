@@ -2782,7 +2782,7 @@ mod tests {
             concat!(
                 r#"{"timestamp":"2026-08-18T12:00:00Z","type":"session_meta","payload":{"id":"status"}}"#,
                 "\n",
-                r#"{"timestamp":"2026-08-18T12:00:01Z","type":"event_msg","payload":{"type":"task_started"}}"#,
+                r#"{"timestamp":"2026-08-18T12:00:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
                 "\n",
             ),
         )
