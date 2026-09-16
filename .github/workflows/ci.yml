@@ -51,6 +51,9 @@ jobs:
       - name: Docker entrypoint tests
         run: sh script/docker-entrypoint.test.sh
 
+      - name: Session cleanup script tests
+        run: bash script/delete-codex-sessions.test.sh
+
       - name: Rust format check
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
 
