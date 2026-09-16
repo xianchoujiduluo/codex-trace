@@ -4,6 +4,43 @@ All notable changes to codex-trace are documented here. Versions follow
 [semantic versioning](https://semver.org/), and this file follows
 [Keep a Changelog](https://keepachangelog.com/) conventions.
 
+## [0.4.17] — 2026-09-16
+
+### Added
+
+- **Chat-style session view**. Transcripts render as a conversation — prompts in right-aligned
+  bubbles, replies below them — with a compact tick rail on the right that jumps to any question
+  in the session and keeps its place marked.
+- **Per-message activity timeline**. Tool calls and reasoning blocks of a turn are interleaved in
+  stream order under the reply that produced them, hidden until "Show activity" is pressed. Tool
+  lines expand in place into the full command, diff and output, and the toggle scrolls the calls
+  it just revealed into view.
+- **Prompt in the turn detail header**. Opening a turn now shows the question it answers, so the
+  reasoning, tool calls and final answer below it have their context on screen.
+
+### Changed
+
+- **Neutral deep gray palette**. The blue-violet theme is replaced with a muted one, and every
+  remaining hard-coded tint now derives from a palette token.
+- **Wider, unframed reading column**, looser spacing between messages, and friendlier tool
+  summaries in the detail view.
+- **Markdown renders in the transcript**, the same as it already did in the detail view, with
+  single newlines preserved the way a chat client shows them.
+- Reply headers lead with the timestamp followed by the turn's execution time in seconds.
+
+### Fixed
+
+- **Claude Code and pi sessions show as running again**. A turn was treated as finished as soon as
+  its tool calls returned, but the model routinely reads those results and keeps going — so a live
+  session, whose file sits on a tool result most of the time, never showed the running indicator.
+  The provider's own stop reason now decides. Turn statuses, discovery and the activity tracker all
+  use it, since the picker, sidebar and detail view read different ones.
+- **Clicking a tool line in the transcript no longer jumps to the turn detail** — it expands the
+  call where it is.
+- Plaintext reasoning is displayed in the turn detail instead of being reported as encrypted.
+
+[0.4.17]: https://github.com/xianchoujiduluo/codex-trace/releases/tag/v0.4.17
+
 ## [0.4.16] — 2026-09-13
 
 ### Added
