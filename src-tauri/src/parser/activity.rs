@@ -4,7 +4,7 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use super::chat::{ChatBlock, ChatEvent};
+use super::chat::{ChatEvent, ChatStop};
 use super::compression::resolve_rollout_path;
 use super::discover::{scan_session_file, user_message_from_payload, CodexSessionInfo};
 use super::entry::{event_msg_type, RawEntry};
@@ -52,7 +52,6 @@ pub struct ActivityTracker {
     is_ongoing: bool,
     last_activity_time: String,
     last_user_message: Option<String>,
-    pending_tool_calls: usize,
     fingerprint: FileFingerprint,
 }
 
@@ -85,7 +84,6 @@ impl ActivityTracker {
             is_ongoing: info.is_ongoing,
             last_activity_time: info.last_activity_time.clone(),
             last_user_message: info.last_user_message.clone(),
-            pending_tool_calls: 0,
             fingerprint,
         }
     }
@@ -246,18 +244,19 @@ impl ActivityTracker {
                     self.turn_count += 1;
                     self.is_ongoing = true;
                 }
-                ChatEvent::Assistant { blocks, .. } => {
-                    self.pending_tool_calls += blocks
-                        .iter()
-                        .filter(|block| matches!(block, ChatBlock::ToolUse { .. }))
-                        .count();
-                    self.is_ongoing = true;
+                ChatEvent::Assistant { stop, .. } => {
+                    // The provider's stop reason decides: `tool_use` means more is
+                    // coming, anything terminal means this turn is done. Without
+                    // one, an assistant line still means the session is alive.
+                    self.is_ongoing = stop != Some(ChatStop::Terminal);
                 }
                 ChatEvent::ToolResult { .. } => {
-                    self.pending_tool_calls = self.pending_tool_calls.saturating_sub(1);
-                    if self.pending_tool_calls == 0 {
-                        self.is_ongoing = false;
-                    }
+                    // Deliberately does not close the turn: returning a tool result
+                    // only means the model can continue, and it routinely reads the
+                    // result, thinks, and answers afterwards. Closing here was why
+                    // a running Claude Code or pi session never showed as running —
+                    // its file sits on a tool result most of the time. A run that
+                    // really did stop is cleared by the staleness check below.
                 }
                 ChatEvent::Ignored
                 | ChatEvent::Meta { .. }
@@ -438,5 +437,58 @@ mod tests {
         let paths = collect_session_paths(dir.path());
         assert_eq!(paths.len(), 1);
         assert!(paths.contains(&dir.path().join("rollout-one.jsonl")));
+    }
+
+    /// Chat-provider tracker over a Claude transcript whose head is a tool call
+    /// still open, with `last_line` appended — the shape a live session is in most
+    /// of the time. The tempdir is returned so the file outlives the tracker, and
+    /// the path keeps its `.claude/projects` layout because provider detection
+    /// reads it back off the path.
+    fn claude_tracker(last_line: &str) -> (tempfile::TempDir, ActivityTracker) {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let session_dir = dir.path().join(".claude/projects/-tmp-proj");
+        std::fs::create_dir_all(&session_dir).unwrap();
+        let path = session_dir.join("29433de8-live.jsonl");
+        let head = concat!(
+            r#"{"type":"user","message":{"role":"user","content":"check the tests"},"uuid":"u-1","timestamp":"2026-07-11T18:05:06Z","sessionId":"s1"}"#,
+            "\n",
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu-9","name":"Bash","input":{"command":"cargo test"}}],"stop_reason":"tool_use","usage":{"input_tokens":10,"output_tokens":5}},"uuid":"a-1","timestamp":"2026-07-11T18:05:10Z"}"#,
+            "\n"
+        );
+        std::fs::write(&path, head).unwrap();
+        let mut tracker = ActivityTracker::load(&path).unwrap();
+        let mut file = OpenOptions::new().append(true).open(&path).unwrap();
+        writeln!(file, "{last_line}").unwrap();
+        drop(file);
+        tracker.refresh().unwrap();
+        (dir, tracker)
+    }
+
+    #[test]
+    fn a_returned_tool_result_does_not_end_a_chat_turn() {
+        // Before this, `pending_tool_calls` hitting zero cleared `is_ongoing`, so a
+        // running Claude Code or pi session never showed as running: its file sits
+        // on a tool result while the model reads it and composes its answer.
+        let (_dir, tracker) = claude_tracker(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu-9","content":[{"type":"text","text":"ok"}]}]},"uuid":"u-2","timestamp":"2026-07-11T18:05:11Z"}"#,
+        );
+        assert!(tracker.snapshot().is_ongoing);
+    }
+
+    #[test]
+    fn a_terminal_stop_reason_ends_a_chat_turn() {
+        let (_dir, tracker) = claude_tracker(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done."}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":5}},"uuid":"a-2","timestamp":"2026-07-11T18:05:20Z"}"#,
+        );
+        assert!(!tracker.snapshot().is_ongoing);
+    }
+
+    #[test]
+    fn a_tool_use_stop_reason_keeps_a_chat_turn_running() {
+        let (_dir, tracker) = claude_tracker(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu-10","name":"Bash","input":{"command":"ls"}}],"stop_reason":"tool_use","usage":{"input_tokens":10,"output_tokens":5}},"uuid":"a-3","timestamp":"2026-07-11T18:05:20Z"}"#,
+        );
+        assert!(tracker.snapshot().is_ongoing);
     }
 }

@@ -35,6 +35,33 @@ pub struct ChatUsage {
     pub reasoning_output_tokens: u64,
 }
 
+/// How an assistant response ended, as far as the provider records it.
+///
+/// `ToolUse` is a continuation: the model asked for tools and the run stays
+/// alive until their results come back. Every other recorded reason
+/// (`end_turn`, pi's `stop`, `error`, `length`, …) means the response is
+/// finished and nothing further is coming for that turn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChatStop {
+    ToolUse,
+    Terminal,
+}
+
+/// Map a provider stop reason onto [`ChatStop`]. Providers disagree on the
+/// spelling of the tool-use reason (`tool_use` vs `toolUse`), so the compare is
+/// case-insensitive; an unknown reason is terminal because the only reason to
+/// stay open is an explicit request for tools.
+pub fn chat_stop(reason: Option<&str>) -> Option<ChatStop> {
+    let reason = reason?;
+    Some(
+        if reason.eq_ignore_ascii_case("tool_use") || reason.eq_ignore_ascii_case("tooluse") {
+            ChatStop::ToolUse
+        } else {
+            ChatStop::Terminal
+        },
+    )
+}
+
 /// Provider-neutral events extracted from raw JSONL lines.
 #[derive(Debug, Clone)]
 pub enum ChatEvent {
@@ -60,6 +87,8 @@ pub enum ChatEvent {
         timestamp: Option<String>,
         model: Option<String>,
         usage: Option<ChatUsage>,
+        /// Absent when the provider did not record a reason on this line.
+        stop: Option<ChatStop>,
     },
     /// The result of a previously issued tool call. Belongs to the turn the
     /// call was made in, never starts a new turn.
@@ -262,6 +291,7 @@ impl ChatAdapter for ClaudeAdapter {
                     timestamp: opt_str_field(line, "timestamp"),
                     model: opt_str_field(message, "model"),
                     usage,
+                    stop: chat_stop(message.get("stop_reason").and_then(Value::as_str)),
                 }]
             }
             _ => vec![ChatEvent::Ignored],
@@ -395,6 +425,7 @@ impl ChatAdapter for PiAdapter {
                             timestamp,
                             model: opt_str_field(message, "model"),
                             usage,
+                            stop: chat_stop(message.get("stopReason").and_then(Value::as_str)),
                         }]
                     }
                     "toolResult" => {
@@ -487,6 +518,18 @@ pub struct ChatSessionBuilder {
     model: Option<String>,
     turns: Vec<CodexTurn>,
     pending: IndexMap<String, PendingChatCall>,
+    /// Whether the turn currently being built is still expecting output.
+    ///
+    /// `pending` (outstanding tool calls) is only half the answer: a turn whose
+    /// tools have all returned but that has not reported a final response yet is
+    /// equally unfinished, and one where the client never recorded the tool
+    /// results would look running forever. The provider's own stop reason is the
+    /// authority — `ToolUse` opens the turn, anything terminal closes it.
+    awaiting_response: bool,
+    /// Whether any assistant line carried a stop reason. Transcripts that never
+    /// record one (an older or unknown provider) fall back to counting open tool
+    /// calls, so a missing signal cannot pin every turn as running.
+    saw_stop: bool,
     order_counter: usize,
     cumulative: ChatUsage,
     last_timestamp: Option<u64>,
@@ -504,6 +547,8 @@ impl ChatSessionBuilder {
             model: None,
             turns: Vec::new(),
             pending: IndexMap::new(),
+            awaiting_response: false,
+            saw_stop: false,
             order_counter: 0,
             cumulative: ChatUsage::default(),
             last_timestamp: None,
@@ -566,12 +611,16 @@ impl ChatSessionBuilder {
                 turn.cwd = self.cwd.clone();
                 turn.model = self.model.clone();
                 self.turns.push(turn);
+                // A user prompt opens a turn that is unfinished until the model
+                // reports a terminal stop reason.
+                self.awaiting_response = true;
             }
             ChatEvent::Assistant {
                 blocks,
                 timestamp,
                 model,
                 usage,
+                stop,
             } => {
                 self.track_timestamp(&timestamp);
                 if let Some(model) = &model {
@@ -597,6 +646,15 @@ impl ChatSessionBuilder {
                 }
                 if let Some(model) = model {
                     self.turns[turn_index].model = Some(model);
+                }
+                if let Some(stop) = stop {
+                    self.saw_stop = true;
+                    // Only the newest turn's flag can be stale (earlier turns are
+                    // closed by the next user prompt), so a late assistant line
+                    // cannot resurrect an already-finished turn.
+                    if turn_index == self.current_turn_index().unwrap_or(usize::MAX) {
+                        self.awaiting_response = stop == ChatStop::ToolUse;
+                    }
                 }
                 for block in blocks {
                     match block {
@@ -738,7 +796,17 @@ impl ChatSessionBuilder {
                 .pending
                 .values()
                 .any(|pending| pending.turn_index == index);
-            turn.status = if has_pending {
+            // Only the last turn can still be awaiting output: every earlier one
+            // was closed by the user message that started the next. Where the
+            // transcript records no stop reason at all, the open tool calls are
+            // all there is to go on, so an unknown provider is not left running.
+            let await_signal = if self.saw_stop {
+                self.awaiting_response
+            } else {
+                has_pending
+            };
+            let unfinished = has_pending || (Some(index) == last_index && await_signal);
+            turn.status = if unfinished {
                 if Some(index) == last_index && !file_fresh {
                     // The writer stopped mid-turn long ago; the run was cut off.
                     TurnStatus::Aborted
@@ -874,6 +942,15 @@ pub fn scan_chat_session(path: &Path, provider: Provider) -> Option<CodexSession
     let mut turn_count: u32 = 0;
     let mut pending_calls: usize = 0;
     let mut total_tokens: u64 = 0;
+    // Mirrors the builder: a prompt opens the turn, and only the provider's own
+    // stop reason closes it. Without this, a session whose last line is a tool
+    // result — the normal shape while the model is thinking about it — looked
+    // finished, and neither Claude Code nor pi ever showed as running.
+    let mut awaiting_response = false;
+    // Whether any line carried a stop reason. Transcripts that never record one
+    // (a provider this code does not know yet) fall back to counting open tool
+    // calls, so a missing stop signal cannot pin every session as running.
+    let mut saw_stop = false;
 
     for line in reader.lines().map_while(Result::ok) {
         let trimmed = line.trim();
@@ -908,15 +985,23 @@ pub fn scan_chat_session(path: &Path, provider: Provider) -> Option<CodexSession
                 ChatEvent::User { text, .. } => {
                     turn_count += 1;
                     last_user_message = Some(text);
+                    awaiting_response = true;
                 }
                 ChatEvent::Assistant {
-                    model: m, usage, ..
+                    model: m,
+                    usage,
+                    stop,
+                    ..
                 } => {
                     if let Some(m) = m {
                         model = Some(m);
                     }
                     if let Some(usage) = usage {
                         total_tokens += usage.input_tokens + usage.output_tokens;
+                    }
+                    if let Some(stop) = stop {
+                        saw_stop = true;
+                        awaiting_response = stop == ChatStop::ToolUse;
                     }
                 }
                 ChatEvent::ToolResult { call_id, .. } => {
@@ -970,7 +1055,15 @@ pub fn scan_chat_session(path: &Path, provider: Provider) -> Option<CodexSession
     }
 
     let file_fresh = file_is_fresh(path);
-    let is_ongoing = file_fresh && pending_calls > 0;
+    // `pending_calls` stays as the fallback for transcripts that never record a
+    // stop reason; where one is recorded, it is the authority, because a turn can
+    // be unfinished with no tool call open (the model is composing its answer).
+    let unfinished = if saw_stop {
+        awaiting_response
+    } else {
+        pending_calls > 0
+    };
+    let is_ongoing = file_fresh && unfinished;
     let end_time = if is_ongoing {
         None
     } else {
@@ -1388,6 +1481,113 @@ mod tests {
         let session = builder.finish(Path::new("/tmp/stale.jsonl"), false);
         assert_eq!(session.turns[0].status, TurnStatus::Aborted);
         assert!(!session.is_ongoing);
+    }
+
+    #[test]
+    fn stop_reason_tool_use_keeps_the_turn_ongoing_after_its_tools_return() {
+        // The shape a live Claude Code session is in most of the time: the last
+        // line is a tool result, so no tool call is outstanding, yet the model
+        // still has to answer. Counting open calls alone reported it finished.
+        let live = r#"{"type":"user","message":{"role":"user","content":"check the tests"},"uuid":"u-1","timestamp":"2026-07-11T18:05:06Z","sessionId":"s1"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu-9","name":"Bash","input":{"command":"cargo test"}}],"stop_reason":"tool_use","usage":{"input_tokens":10,"output_tokens":5}},"uuid":"a-1","timestamp":"2026-07-11T18:05:10Z"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu-9","content":[{"type":"text","text":"ok"}]}]},"uuid":"u-2","timestamp":"2026-07-11T18:05:11Z"}"#;
+        let mut builder = ChatSessionBuilder::new(Provider::Claude);
+        for line in live.lines() {
+            builder.push_line(line);
+        }
+        let session = builder.finish(Path::new("/tmp/live.jsonl"), true);
+        assert_eq!(session.turns[0].status, TurnStatus::Ongoing);
+        assert!(session.is_ongoing);
+    }
+
+    #[test]
+    fn stop_reason_end_turn_finishes_the_turn_even_while_the_file_is_fresh() {
+        let finished = r#"{"type":"user","message":{"role":"user","content":"hi"},"uuid":"u-1","timestamp":"2026-07-11T18:05:06Z","sessionId":"s1"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":5}},"uuid":"a-1","timestamp":"2026-07-11T18:05:10Z"}"#;
+        let mut builder = ChatSessionBuilder::new(Provider::Claude);
+        for line in finished.lines() {
+            builder.push_line(line);
+        }
+        // Still freshly written, so only the stop reason can close the turn.
+        let session = builder.finish(Path::new("/tmp/done.jsonl"), true);
+        assert_eq!(session.turns[0].status, TurnStatus::Complete);
+        assert!(!session.is_ongoing);
+    }
+
+    #[test]
+    fn pi_stop_reasons_are_read_the_same_way() {
+        let live = r#"{"type":"session","version":3,"id":"019f9d06","timestamp":"2026-07-26T06:05:02.097Z","cwd":"/work/jable"}
+{"type":"message","id":"m-1","timestamp":"2026-07-26T06:05:16.822Z","message":{"role":"user","content":[{"type":"text","text":"list the files"}]}}
+{"type":"message","id":"m-2","timestamp":"2026-07-26T06:05:19.895Z","message":{"role":"assistant","content":[{"type":"toolCall","id":"call-1","name":"bash","arguments":{"command":"ls -la"}}],"stopReason":"toolUse","usage":{"input":100,"output":10}}}
+{"type":"message","id":"m-3","timestamp":"2026-07-26T06:05:20.001Z","message":{"role":"toolResult","toolCallId":"call-1","toolName":"bash","content":[{"type":"text","text":"main.rs"}],"isError":false}}"#;
+        let mut builder = ChatSessionBuilder::new(Provider::Pi);
+        for line in live.lines() {
+            builder.push_line(line);
+        }
+        let session = builder.finish(Path::new("/tmp/pi-live.jsonl"), true);
+        assert_eq!(session.turns[0].status, TurnStatus::Ongoing);
+
+        let ended = format!(
+            "{live}\n{}",
+            r#"{"type":"message","id":"m-4","timestamp":"2026-07-26T06:05:25.000Z","message":{"role":"assistant","content":[{"type":"text","text":"One file here."}],"stopReason":"stop","usage":{"input":120,"output":20}}}"#
+        );
+        let mut builder = ChatSessionBuilder::new(Provider::Pi);
+        for line in ended.lines() {
+            builder.push_line(line);
+        }
+        let session = builder.finish(Path::new("/tmp/pi-done.jsonl"), true);
+        assert_eq!(session.turns[0].status, TurnStatus::Complete);
+        assert!(!session.is_ongoing);
+    }
+
+    #[test]
+    fn transcripts_without_a_stop_reason_still_fall_back_to_open_tool_calls() {
+        // No line carries a stop reason, so the provider is treated as unknown:
+        // an open tool call keeps the turn running, a closed one does not.
+        let unknown = r#"{"type":"user","message":{"role":"user","content":"do it"},"uuid":"u-1","timestamp":"2026-07-11T18:05:06Z","sessionId":"s1"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu-9","name":"Bash","input":{"command":"ls"}}],"usage":{"input_tokens":10,"output_tokens":5}},"uuid":"a-1","timestamp":"2026-07-11T18:05:10Z"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu-9","content":[{"type":"text","text":"ok"}]}]},"uuid":"u-2","timestamp":"2026-07-11T18:05:11Z"}"#;
+        let mut builder = ChatSessionBuilder::new(Provider::Claude);
+        for line in unknown.lines() {
+            builder.push_line(line);
+        }
+        let session = builder.finish(Path::new("/tmp/unknown.jsonl"), true);
+        assert_eq!(session.turns[0].status, TurnStatus::Complete);
+        assert!(!session.is_ongoing);
+    }
+
+    #[test]
+    fn scan_marks_a_turn_ongoing_while_it_awaits_the_model() {
+        // The picker and sidebar read `is_ongoing` off the scan, not the full
+        // parse, so both paths have to agree about a turn waiting on the model.
+        let (_dir, path) = temp_session(
+            "live-claude.jsonl",
+            r#"{"type":"user","message":{"role":"user","content":"hi"},"uuid":"u-1","timestamp":"2026-07-11T18:05:06Z","sessionId":"s1"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"looking"}],"stop_reason":"tool_use","usage":{"input_tokens":10,"output_tokens":5}},"uuid":"a-1","timestamp":"2026-07-11T18:05:10Z"}"#,
+        );
+        let info = scan_chat_session(&path, Provider::Claude).unwrap();
+        assert!(info.is_ongoing);
+        assert_eq!(info.end_time, None);
+
+        let (_dir, path) = temp_session(
+            "done-claude.jsonl",
+            r#"{"type":"user","message":{"role":"user","content":"hi"},"uuid":"u-1","timestamp":"2026-07-11T18:05:06Z","sessionId":"s1"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":5}},"uuid":"a-1","timestamp":"2026-07-11T18:05:10Z"}"#,
+        );
+        let info = scan_chat_session(&path, Provider::Claude).unwrap();
+        assert!(!info.is_ongoing);
+        assert_eq!(info.end_time.as_deref(), Some("2026-07-11T18:05:10Z"));
+    }
+
+    #[test]
+    fn chat_stop_accepts_both_provider_spellings() {
+        assert_eq!(chat_stop(Some("tool_use")), Some(ChatStop::ToolUse));
+        assert_eq!(chat_stop(Some("toolUse")), Some(ChatStop::ToolUse));
+        assert_eq!(chat_stop(Some("end_turn")), Some(ChatStop::Terminal));
+        assert_eq!(chat_stop(Some("stop")), Some(ChatStop::Terminal));
+        assert_eq!(chat_stop(Some("error")), Some(ChatStop::Terminal));
+        // A missing reason is not a stop signal, so it must not read as terminal.
+        assert_eq!(chat_stop(None), None);
     }
 
     #[test]
