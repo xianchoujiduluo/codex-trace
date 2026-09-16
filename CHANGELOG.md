@@ -4,6 +4,42 @@ All notable changes to codex-trace are documented here. Versions follow
 [semantic versioning](https://semver.org/), and this file follows
 [Keep a Changelog](https://keepachangelog.com/) conventions.
 
+## [0.4.18] — 2026-09-16
+
+### Added
+
+- **Batch session cleanup script**. `script/delete-codex-sessions.sh` reads session UUIDs from
+  `sessions.txt` and deletes them with `codex delete --force`. Blank lines, `#` comments and
+  duplicates are ignored, and a malformed line aborts the whole run before anything is removed,
+  so a typo cannot leave the batch half-applied. `--yes` skips the confirmation prompt, which is
+  required when there is no terminal.
+
+### Fixed
+
+- **The desktop app can read a session's activity status again**. `get_session_status` has been
+  registered as a Tauri command since 0.4.13 but was never granted in the ACL, so the desktop app
+  rejected it with `Command get_session_status not allowed by ACL` every time a session was
+  opened. Web mode was unaffected because it reaches the same command over HTTP.
+- **Large sessions no longer arrive in one piece**. A session page was bounded only by a byte
+  budget, so a long conversation whose turns are individually small came back whole and
+  `has_more` never became true — the "load older turns" affordance never appeared, and a 17 MB
+  pi session (only 99 turns) was sent in its entirety. Pages are now sized by turn count (ten at
+  a time, about one screen) with the byte budget kept as the safety valve for a single enormous
+  turn.
+- **Paged history survives a live update**. When the file watcher rebuilt a session it broadcast
+  only the newest page, and the transcript replaced its state with it, silently discarding every
+  older page the reader had loaded. The broadcast is now merged into the loaded turns, and the
+  pagination cursor stays at the older edge the reader reached.
+- **The transcript previews the reply a turn ended on**, not the one it opened with.
+
+### Changed
+
+- **Scrolling to the top of the transcript loads the previous page**, alongside the existing
+  button. The trigger disarms itself after firing and re-arms only once you scroll away and come
+  back, so a page that does not fill the window cannot chain-load the whole session.
+
+[0.4.18]: https://github.com/xianchoujiduluo/codex-trace/releases/tag/v0.4.18
+
 ## [0.4.17] — 2026-09-16
 
 ### Added
