@@ -37,6 +37,36 @@ function mergeTurns(
   });
 }
 
+/**
+ * Fold a `kind: "full"` session broadcast into the loaded session.
+ *
+ * The watcher sends the newest page of a rebuilt session, not the whole thing,
+ * so replacing the state with it would discard every older page the reader had
+ * already pulled in with "load older turns" — the list would silently collapse
+ * back to one page. Merging by `turn_id` keeps what is loaded and adds whatever
+ * is new; the pagination cursor stays pointed at the older edge the reader
+ * reached, while the counts follow the file.
+ */
+function mergeFullSession(existing: CodexSession, incoming: CodexSession): CodexSession {
+  const byId = new Map(existing.turns.map((turn) => [turn.turn_id, turn]));
+  for (const turn of incoming.turns) byId.set(turn.turn_id, turn);
+  const turns = [...byId.values()].toSorted((a, b) => (a.started_at ?? 0) - (b.started_at ?? 0));
+
+  return {
+    ...incoming,
+    turns,
+    pagination: incoming.pagination
+      ? {
+          ...incoming.pagination,
+          // The incoming page's own cursor points at the newer edge; the one the
+          // reader loaded to is the older edge, which only `existing` knows.
+          next_cursor: existing.pagination?.next_cursor ?? incoming.pagination.next_cursor,
+          has_more: existing.pagination?.has_more ?? incoming.pagination.has_more,
+        }
+      : (existing.pagination ?? incoming.pagination),
+  };
+}
+
 function applySessionUpdate(session: CodexSession, update: SessionPatch | SessionStatus) {
   const existingTotalTurns = session.pagination?.total_turns ?? session.turns.length;
   const sourceSizeUnchanged =
@@ -165,11 +195,14 @@ export function useSession() {
 
   useTauriEvent<SessionUpdatePayload>("session-update", (payload) => {
     if (payload.kind === "full" && payload.session) {
+      const incoming = payload.session;
       setState((prev) => {
-        if (prev.sessionPath && payload.session?.path !== prev.sessionPath) return prev;
-        sourceSizeRef.current =
-          payload.session?.pagination?.source_size_bytes ?? sourceSizeRef.current;
-        return { ...prev, session: payload.session };
+        if (prev.sessionPath && incoming.path !== prev.sessionPath) return prev;
+        sourceSizeRef.current = incoming.pagination?.source_size_bytes ?? sourceSizeRef.current;
+        return {
+          ...prev,
+          session: prev.session ? mergeFullSession(prev.session, incoming) : incoming,
+        };
       });
       return;
     }

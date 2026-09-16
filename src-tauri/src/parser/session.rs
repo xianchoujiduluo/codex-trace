@@ -262,6 +262,16 @@ pub const FULL_SESSION_THRESHOLD_BYTES: u64 = 10 * 1024 * 1024;
 pub const DEFAULT_SESSION_PAGE_BYTES: usize = 10 * 1024 * 1024;
 const MAX_SESSION_PAGE_BYTES: usize = 64 * 1024 * 1024;
 
+/// Turns in one page when the caller does not ask for a size.
+///
+/// A turn is the unit a reader perceives — "how much conversation did I get" —
+/// while the byte budget above is what a single turn can occasionally blow
+/// through (a 17 MB pi session is 99 turns, so a 10 MiB byte page returned the
+/// whole thing and the load-more affordance never appeared at all). Ten turns is
+/// roughly one screen of transcript; `DEFAULT_SESSION_PAGE_BYTES` stays as the
+/// safety valve that stops one enormous turn from making the page unbounded.
+pub const DEFAULT_SESSION_PAGE_TURNS: usize = 10;
+
 #[cfg(unix)]
 fn file_identity(metadata: &fs::Metadata) -> Option<(u64, u64)> {
     use std::os::unix::fs::MetadataExt;
@@ -665,6 +675,13 @@ impl SessionHandle {
 }
 
 /// Return either the complete session or a turn-aligned page for a large session.
+///
+/// The small-session shortcut below is deliberate: a transcript under
+/// [`FULL_SESSION_THRESHOLD_BYTES`] opens instantly either way, and loading it
+/// whole is what lets in-session search, the question minimap and previous/next
+/// reply navigation see the entire conversation. Applying a page to it would
+/// silently narrow those to the newest turns. Large sessions have always been
+/// paged; this is the path that was returning too much per page.
 pub fn page_session(
     session: &CodexSession,
     direction: SessionPageDirection,
@@ -682,6 +699,10 @@ pub fn page_session(
     let total_turns = session.turns.len();
     let mut selected = Vec::new();
     let mut selected_bytes = 0usize;
+    // Both limits close the page; the turn count is the one that normally binds.
+    let page_is_full = |selected: &[CodexTurn], bytes: usize| -> bool {
+        selected.len() >= DEFAULT_SESSION_PAGE_TURNS || bytes >= max_bytes
+    };
     let (next_cursor, has_more) = match direction {
         SessionPageDirection::Forward => {
             let start = cursor.unwrap_or(0).min(total_turns);
@@ -690,13 +711,19 @@ pub fn page_session(
                 let turn_bytes = serde_json::to_vec(turn)
                     .map_err(|error| format!("serialize turn: {error}"))?
                     .len();
-                if !selected.is_empty() && selected_bytes + turn_bytes > max_bytes {
+                // Checked before the push so the byte budget can never produce an
+                // empty page: a turn larger than the whole budget still rides
+                // alone in one, rather than being skipped over forever.
+                if !selected.is_empty()
+                    && (page_is_full(&selected, selected_bytes)
+                        || selected_bytes + turn_bytes > max_bytes)
+                {
                     break;
                 }
                 selected.push(turn.clone());
                 selected_bytes += turn_bytes;
                 end += 1;
-                if selected_bytes >= max_bytes {
+                if page_is_full(&selected, selected_bytes) {
                     break;
                 }
             }
@@ -712,13 +739,16 @@ pub fn page_session(
                 let turn_bytes = serde_json::to_vec(turn)
                     .map_err(|error| format!("serialize turn: {error}"))?
                     .len();
-                if !selected.is_empty() && selected_bytes + turn_bytes > max_bytes {
+                if !selected.is_empty()
+                    && (page_is_full(&selected, selected_bytes)
+                        || selected_bytes + turn_bytes > max_bytes)
+                {
                     break;
                 }
                 selected.push(turn.clone());
                 selected_bytes += turn_bytes;
                 start -= 1;
-                if selected_bytes >= max_bytes {
+                if page_is_full(&selected, selected_bytes) {
                     break;
                 }
             }
@@ -2763,6 +2793,116 @@ mod tests {
         assert_eq!(newer.turns.len(), 1);
         assert_eq!(newer.turns[0].turn_id, "turn-2");
         assert!(!newer.pagination.as_ref().unwrap().has_more);
+    }
+
+    #[test]
+    fn default_page_size_counts_turns_rather_than_bytes() {
+        // A realistic session: many small turns that together sit far under the
+        // byte budget. Sizing the page in bytes returned every one of them, so
+        // the transcript had nothing left to load and no pagination affordance.
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("rollout-many-turns.jsonl");
+        let mut lines = vec![
+            r#"{"timestamp":"2026-08-18T11:00:00Z","type":"session_meta","payload":{"id":"many-turns","timestamp":"2026-08-18T11:00:00Z"}}"#.to_string(),
+        ];
+        let turn_count = DEFAULT_SESSION_PAGE_TURNS * 3;
+        let total_minutes = turn_count as u32;
+        for index in 0..total_minutes {
+            let hour = 11 + index / 60;
+            let minute = index % 60;
+            let stamp = |second: u32| format!("2026-08-18T{hour:02}:{minute:02}:{second:02}Z");
+            lines.push(format!(
+                r#"{{"timestamp":"{}","type":"event_msg","payload":{{"type":"task_started","turn_id":"turn-{index}"}}}}"#,
+                stamp(0)
+            ));
+            lines.push(format!(
+                r#"{{"timestamp":"{}","type":"event_msg","payload":{{"type":"agent_message","message":"reply {index}","phase":"final_answer"}}}}"#,
+                stamp(1)
+            ));
+            lines.push(format!(
+                r#"{{"timestamp":"{}","type":"event_msg","payload":{{"type":"task_complete","turn_id":"turn-{index}"}}}}"#,
+                stamp(2)
+            ));
+        }
+        std::fs::write(&path, lines.join("\n")).unwrap();
+
+        let session = parse_session(&path).unwrap();
+        assert_eq!(session.turns.len(), turn_count);
+        let source_size_bytes = std::fs::metadata(&path).unwrap().len();
+        assert!(source_size_bytes > 0);
+
+        // No maxBytes: the defaults decide, and the default must be the turn count.
+        let page = page_session(
+            &session,
+            SessionPageDirection::Backward,
+            None,
+            None,
+            FULL_SESSION_THRESHOLD_BYTES + 1,
+        )
+        .unwrap();
+        assert_eq!(page.turns.len(), DEFAULT_SESSION_PAGE_TURNS);
+        assert_eq!(
+            page.turns.last().unwrap().turn_id,
+            format!("turn-{}", turn_count - 1)
+        );
+        let pagination = page.pagination.as_ref().unwrap();
+        assert!(pagination.has_more);
+        let boundary = pagination.next_cursor.unwrap();
+        assert_eq!(boundary, turn_count - DEFAULT_SESSION_PAGE_TURNS);
+        // The byte budget is not what stopped it — the turns are tiny.
+        assert!(pagination.page_bytes >= DEFAULT_SESSION_PAGE_BYTES);
+
+        // The next page reaches back from that boundary without overlapping.
+        let older = page_session(
+            &session,
+            SessionPageDirection::Backward,
+            Some(boundary),
+            None,
+            FULL_SESSION_THRESHOLD_BYTES + 1,
+        )
+        .unwrap();
+        assert_eq!(older.turns.len(), DEFAULT_SESSION_PAGE_TURNS);
+        assert_eq!(older.turns.last().unwrap().turn_id, "turn-19");
+        assert_eq!(older.turns[0].turn_id, "turn-10");
+    }
+
+    #[test]
+    fn a_single_oversized_turn_still_fills_the_page() {
+        // The byte budget must not be able to produce an empty page: one turn
+        // larger than max_bytes is still returned on its own.
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("rollout-oversized.jsonl");
+        let huge = "x".repeat(200_000);
+        std::fs::write(
+            &path,
+            [
+                r#"{"timestamp":"2026-08-18T11:00:00Z","type":"session_meta","payload":{"id":"oversized","timestamp":"2026-08-18T11:00:00Z"}}"#,
+                r#"{"timestamp":"2026-08-18T11:00:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1"}}"#,
+                format!(
+                    r#"{{"timestamp":"2026-08-18T11:00:02Z","type":"event_msg","payload":{{"type":"agent_message","message":"{huge}","phase":"final_answer"}}}}"#
+                )
+                .as_str(),
+                r#"{"timestamp":"2026-08-18T11:00:03Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-1"}}"#,
+                r#"{"timestamp":"2026-08-18T11:01:01Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-2"}}"#,
+                r#"{"timestamp":"2026-08-18T11:01:02Z","type":"event_msg","payload":{"type":"agent_message","message":"small","phase":"final_answer"}}"#,
+                r#"{"timestamp":"2026-08-18T11:01:03Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"turn-2"}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let session = parse_session(&path).unwrap();
+        let page = page_session(
+            &session,
+            SessionPageDirection::Backward,
+            None,
+            Some(64 * 1024),
+            FULL_SESSION_THRESHOLD_BYTES + 1,
+        )
+        .unwrap();
+        assert_eq!(page.turns.len(), 1);
+        assert_eq!(page.turns[0].turn_id, "turn-2");
+        assert!(page.pagination.as_ref().unwrap().has_more);
     }
 
     fn refresh_kind(refresh: &SessionRefresh) -> &'static str {

@@ -4,6 +4,7 @@ import type {
   AgentMessage,
   CodexToolCall,
   CodexTurn,
+  SessionPagination,
   TokenInfo,
   TokenUsage,
 } from "../../shared/types";
@@ -64,6 +65,27 @@ const EXEC_TOOL: CodexToolCall = {
   subagent_name: null,
   output_truncated: null,
 };
+
+/** A backward-paged session: older turns are still on the server. */
+const BACKWARD_PAGE: SessionPagination = {
+  direction: "backward",
+  next_cursor: 1,
+  has_more: true,
+  total_turns: 4,
+  source_size_bytes: 20_000_000,
+  page_bytes: 10_000_000,
+};
+
+/**
+ * Drive the transcript's scroll listener. jsdom leaves `scrollTop` at 0 always,
+ * so the position is stubbed and the existing `scroll` event dispatched — which
+ * is exactly what the component listens for.
+ */
+function scrollMessageList(container: HTMLElement, scrollTop: number) {
+  const list = container.querySelector<HTMLElement>(".message-list")!;
+  Object.defineProperty(list, "scrollTop", { value: scrollTop, configurable: true });
+  fireEvent.scroll(list);
+}
 
 function makeTurn(overrides: Partial<CodexTurn> = {}): CodexTurn {
   return {
@@ -517,20 +539,71 @@ describe("TurnList", () => {
         turns={[makeTurn()]}
         selectedIndex={0}
         onSelectTurn={vi.fn()}
-        pagination={{
-          direction: "backward",
-          next_cursor: 1,
-          has_more: true,
-          total_turns: 4,
-          source_size_bytes: 20_000_000,
-          page_bytes: 10_000_000,
-        }}
+        pagination={BACKWARD_PAGE}
         onLoadMore={onLoadMore}
       />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: /Load older turns/ }));
     expect(onLoadMore).toHaveBeenCalledOnce();
+  });
+
+  it("loads the previous page when the transcript is scrolled to the top", () => {
+    const onLoadMore = vi.fn();
+    const { container } = render(
+      <TurnList
+        turns={[makeTurn()]}
+        selectedIndex={0}
+        onSelectTurn={vi.fn()}
+        pagination={BACKWARD_PAGE}
+        onLoadMore={onLoadMore}
+      />,
+    );
+
+    scrollMessageList(container, 0);
+    expect(onLoadMore).toHaveBeenCalledOnce();
+    // Sitting at the top keeps firing scroll events; only the first should load.
+    scrollMessageList(container, 0);
+    scrollMessageList(container, 40);
+    expect(onLoadMore).toHaveBeenCalledOnce();
+
+    // Leaving the top and coming back re-arms it for the next page.
+    scrollMessageList(container, 900);
+    scrollMessageList(container, 0);
+    expect(onLoadMore).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not pull older turns while a page is already loading", () => {
+    const onLoadMore = vi.fn();
+    const { container } = render(
+      <TurnList
+        turns={[makeTurn()]}
+        selectedIndex={0}
+        onSelectTurn={vi.fn()}
+        pagination={BACKWARD_PAGE}
+        onLoadMore={onLoadMore}
+        loadingMore
+      />,
+    );
+
+    scrollMessageList(container, 0);
+    expect(onLoadMore).not.toHaveBeenCalled();
+  });
+
+  it("does not pull older turns once the first page is exhausted", () => {
+    const onLoadMore = vi.fn();
+    const { container } = render(
+      <TurnList
+        turns={[makeTurn()]}
+        selectedIndex={0}
+        onSelectTurn={vi.fn()}
+        pagination={{ ...BACKWARD_PAGE, has_more: false, next_cursor: null, direction: "forward" }}
+        onLoadMore={onLoadMore}
+      />,
+    );
+
+    scrollMessageList(container, 0);
+    expect(onLoadMore).not.toHaveBeenCalled();
   });
 });
 

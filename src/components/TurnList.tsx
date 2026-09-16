@@ -20,6 +20,15 @@ import { ActivityTimeline, activityItems } from "./ActivityTimeline";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { matchesTurn } from "../lib/turnSearch";
 import { minimapLayout } from "../lib/minimap";
+
+/**
+ * How close to the top of the transcript counts as "reaching for older turns".
+ *
+ * Same order as `useAutoScroll`'s near-bottom threshold, so the two ends of the
+ * transcript feel alike.
+ */
+const LOAD_OLDER_THRESHOLD_PX = 150;
+
 interface TurnListProps {
   turns: CodexTurn[];
   selectedIndex: number;
@@ -123,6 +132,35 @@ export function TurnList({
       ?.querySelector(`[data-turn-index="${index}"]`)
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  // Reaching the top of the transcript pulls in the previous page; the button
+  // stays for anyone who prefers it, and for a page short enough that no scroll
+  // event ever fires.
+  //
+  // `armedRef` is what keeps this from running away: a page that does not fill
+  // the viewport leaves `scrollTop` at 0, so an unconditional check would load
+  // page after page until the whole session was in memory — the exact thing
+  // paging exists to avoid. The trigger disarms itself and only re-arms once the
+  // reader has scrolled away and come back, so every automatic page costs one
+  // deliberate gesture.
+  const armedRef = useRef(true);
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    if (!onLoadMore || loadingMore) return;
+    if (pagination?.direction !== "backward" || !pagination.has_more) return;
+
+    const handleScroll = () => {
+      if (el.scrollTop > LOAD_OLDER_THRESHOLD_PX * 2) {
+        armedRef.current = true;
+      } else if (el.scrollTop <= LOAD_OLDER_THRESHOLD_PX && armedRef.current) {
+        armedRef.current = false;
+        onLoadMore();
+      }
+    };
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, [listRef, onLoadMore, loadingMore, pagination?.direction, pagination?.has_more]);
 
   const questionTurns = useMemo(
     () => visibleTurns.filter(({ turn }) => (turn.user_message ?? "").trim().length > 0),
