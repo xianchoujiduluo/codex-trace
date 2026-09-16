@@ -2,7 +2,7 @@ import type { AgentMessage, CodexToolCall, CodexTurn } from "../../shared/types"
 import { RawExecDetails, ToolCallItem } from "./ToolCallItem";
 import { ComplementaryItem } from "./ComplementaryItem";
 import { OngoingDots } from "./OngoingDots";
-import { BackIcon, CodexIcon, SpawnIcon } from "./Icons";
+import { BackIcon, CodexIcon, SpawnIcon, UserIcon } from "./Icons";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { CopyMessageButton } from "./CopyMessageButton";
 import { workerPanelTitle } from "./WorkerPanel";
@@ -155,6 +155,19 @@ export function TurnDetail({
         <span className="message-detail__title">Codex</span>
         {model && <span style={{ color: modelColor, fontWeight: 600, fontSize: 12 }}>{model}</span>}
         {turn.status === "ongoing" && <OngoingDots count={3} />}
+        {/* The prompt leads the whole view rather than sitting somewhere inside the
+           timeline: everything below it — reasoning, tool calls, the final answer —
+           only makes sense as a response to it, and scrolling back to find it means
+           losing your place in the trace. Truncated to one line to keep the header
+           from growing; the full text is the tooltip and the search-hit section. */}
+        {turn.user_message && (
+          <span className="message-detail__question" title={turn.user_message}>
+            <span className="message-detail__question-icon">
+              <UserIcon />
+            </span>
+            {turn.user_message.replace(/\s+/g, " ").trim()}
+          </span>
+        )}
         {(contextLeftPercent !== null || metaParts.length > 0) && (
           <div className="message-detail__meta">
             {contextLeftPercent !== null && contextUsedPercent !== null && (

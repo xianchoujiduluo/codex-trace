@@ -121,7 +121,9 @@ function makeWorkerSession(id = "worker-1"): CodexSession {
 }
 
 function renderTurnDetail(turn: CodexTurn) {
-  render(<TurnDetail turn={turn} expanded={new Set()} onToggle={vi.fn()} onBack={vi.fn()} />);
+  return render(
+    <TurnDetail turn={turn} expanded={new Set()} onToggle={vi.fn()} onBack={vi.fn()} />,
+  );
 }
 
 describe("TurnDetail reasoning display", () => {
@@ -216,6 +218,28 @@ describe("TurnDetail", () => {
     );
 
     expect(screen.queryByText(/Agents \(/)).not.toBeInTheDocument();
+  });
+
+  it("shows the turn's prompt in the header, collapsed to a single line", () => {
+    const { container } = renderTurnDetail(
+      makeTurn({ user_message: "Why did the\n\nparser drop  this line?" }),
+    );
+
+    const question = container.querySelector(".message-detail__question")!;
+    expect(question).toBeInTheDocument();
+    // Newlines and runs of spaces collapse so the one-line ellipsis has something
+    // meaningful to cut; the untouched text stays available as the tooltip.
+    expect(question).toHaveTextContent("Why did the parser drop this line?");
+    expect(question).toHaveAttribute("title", "Why did the\n\nparser drop  this line?");
+
+    // It sits in the header, ahead of everything it is the prompt for.
+    const header = container.querySelector(".message-detail__header")!;
+    expect(header.contains(question)).toBe(true);
+  });
+
+  it("omits the header prompt when the turn has no user message", () => {
+    const { container } = renderTurnDetail(makeTurn({ user_message: null }));
+    expect(container.querySelector(".message-detail__question")).not.toBeInTheDocument();
   });
 
   it("shows context-left metadata using Codex's last-token usage", () => {
