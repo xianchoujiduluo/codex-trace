@@ -137,13 +137,17 @@ export function TurnList({
   // stays for anyone who prefers it, and for a page short enough that no scroll
   // event ever fires.
   //
-  // `armedRef` is what keeps this from running away: a page that does not fill
-  // the viewport leaves `scrollTop` at 0, so an unconditional check would load
-  // page after page until the whole session was in memory — the exact thing
-  // paging exists to avoid. The trigger disarms itself and only re-arms once the
-  // reader has scrolled away and come back, so every automatic page costs one
-  // deliberate gesture.
-  const armedRef = useRef(true);
+  // `armedRef` is what keeps this from running away, and it starts **disarmed**.
+  // Scroll events also fire for the app's own programmatic scrolling — opening a
+  // session scrolls the transcript down to the newest turn, and an armed trigger
+  // would read that pass through the top as the reader asking for older turns,
+  // loading a page before they had even seen the newest one. It arms only once
+  // `scrollTop` has moved past `LOAD_OLDER_THRESHOLD_PX * 2`, so the reader must
+  // genuinely be somewhere below the top. It then disarms as it fires, so a page
+  // that does not fill the viewport cannot chain-load page after page until the
+  // whole session is in memory — the exact thing paging exists to avoid. Every
+  // automatic page costs one deliberate gesture.
+  const armedRef = useRef(false);
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;

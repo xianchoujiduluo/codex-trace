@@ -560,14 +560,22 @@ describe("TurnList", () => {
       />,
     );
 
+    // The trigger starts disarmed, so merely being at the top is not a request:
+    // opening a session scrolls through the top, and that must not load a page.
+    scrollMessageList(container, 0);
+    expect(onLoadMore).not.toHaveBeenCalled();
+
+    // A reader who moves down and then comes back to the top asks for older turns.
+    scrollMessageList(container, 900);
     scrollMessageList(container, 0);
     expect(onLoadMore).toHaveBeenCalledOnce();
+
     // Sitting at the top keeps firing scroll events; only the first should load.
     scrollMessageList(container, 0);
     scrollMessageList(container, 40);
     expect(onLoadMore).toHaveBeenCalledOnce();
 
-    // Leaving the top and coming back re-arms it for the next page.
+    // Moving down and back re-arms it for the next page.
     scrollMessageList(container, 900);
     scrollMessageList(container, 0);
     expect(onLoadMore).toHaveBeenCalledTimes(2);

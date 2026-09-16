@@ -109,7 +109,13 @@ export function App() {
     (info: CodexSessionInfo) => {
       loadSession(info.path);
       setView("list");
-      setSelectedTurn(0);
+      // Opening a session lands on its newest turn. The transcript is paged from
+      // the newest end, so index 0 is the *oldest* loaded turn; leaving the
+      // selection there would scroll the reader to the top of the backlog and
+      // read as "this session starts in the past". `-1` means "not yet known" —
+      // the turn count arrives with the async load, so the effect below settles
+      // it once the session is in state. See `useScrollToSelected`.
+      setSelectedTurn(-1);
       setSearchOpen(false);
       setListSearchQuery("");
       setDetailSearchQuery("");
@@ -119,6 +125,15 @@ export function App() {
     },
     [clearTools, loadSession, setPickerSearchQuery],
   );
+
+  // Settle the selection onto the newest turn once the opened session's turns
+  // are known. Guarded on `-1` so it never fights a selection the reader made
+  // while the session was loading.
+  useEffect(() => {
+    if (selectedTurn !== -1 || view !== "list") return;
+    const loaded = session.session?.turns.length ?? 0;
+    if (loaded > 0) setSelectedTurn(loaded - 1);
+  }, [selectedTurn, view, session.session?.turns.length]);
 
   const handleOpenDetail = useCallback(
     (index: number) => {

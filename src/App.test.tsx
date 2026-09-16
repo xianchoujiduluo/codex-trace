@@ -253,4 +253,21 @@ describe("App turn navigation and search", () => {
     expect(scrollSpy.mock.contexts.at(-1)).toBe(document.querySelector('[data-turn-index="1"]'));
     scrollSpy.mockRestore();
   });
+
+  it("opens a session on its newest turn, not its oldest", async () => {
+    // The transcript is paged from the newest end, so index 0 is the oldest
+    // loaded turn. Selecting it on open scrolled the reader to the top of the
+    // backlog, which reads as "this session starts in the past".
+    const scrollSpy = vi.spyOn(Element.prototype, "scrollIntoView");
+    const { container } = render(<App />);
+    fireEvent.click(screen.getAllByText("Batch copy session")[0].closest('[role="button"]')!);
+    await screen.findByText("First reply");
+
+    const selected = container.querySelectorAll(".message--selected");
+    expect(selected.length).toBeGreaterThan(0);
+    const selectedTurn = selected[0].closest("[data-turn-index]");
+    expect(selectedTurn).toHaveAttribute("data-turn-index", "1");
+
+    scrollSpy.mockRestore();
+  });
 });
