@@ -17,3 +17,7 @@ Thumbs.db
 .vscode/
 *.swp
 script/sessions.txt
+
+# Local session exports and notes
+ccswitch-*.json
+GITHUB_RELEASE_EMAIL.md
