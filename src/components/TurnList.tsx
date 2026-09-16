@@ -50,6 +50,27 @@ function executionSeconds(ms: number): string {
   return `${Math.round(ms / 1000)}s`;
 }
 
+/**
+ * The reply text the transcript shows under the header.
+ *
+ * A turn streams as many prose blocks between its tool calls, and a chat
+ * transcript wants the conclusion, not the play-by-play — pi and Claude Code
+ * turns routinely open with a sentence like "看懂了目标界面，现在让我研究代码"
+ * and put the actual answer thousands of characters later. So: an explicit
+ * `phase: "final_answer"` wins where the provider sets one (Codex), and
+ * `turn.final_answer` covers the providers that do not — it holds the last
+ * prose block of the turn, which is the closing message in every transcript
+ * shape seen so far. The first non-reasoning block stays as the last resort for
+ * a turn whose only prose is incomplete.
+ */
+function agentPreviewText(turn: CodexTurn): string | null {
+  if (turn.error) return turn.error;
+  const phased = turn.agent_messages.find((m) => m.phase === "final_answer");
+  if (phased) return phased.text;
+  if (turn.final_answer) return turn.final_answer;
+  return turn.agent_messages.find((m) => !m.is_reasoning)?.text ?? null;
+}
+
 export function TurnList({
   turns,
   selectedIndex,
@@ -174,11 +195,7 @@ export function TurnList({
         {visibleTurns.map(({ turn, index: i }) => {
           const isSelected = i === selectedIndex;
           const userMsg = turn.user_message ?? "";
-          const agentPreview =
-            turn.error ??
-            turn.agent_messages.find((m) => m.phase === "final_answer")?.text ??
-            turn.agent_messages.find((m) => !m.is_reasoning)?.text ??
-            null;
+          const agentPreview = agentPreviewText(turn);
           const hasDetail = Boolean(
             turn.error || turn.agent_messages.length > 0 || turn.tool_calls.length > 0,
           );

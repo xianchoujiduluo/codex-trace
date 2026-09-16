@@ -118,6 +118,76 @@ describe("TurnList", () => {
     expect(screen.getByText("Hi there!")).toBeInTheDocument();
   });
 
+  it("previews the closing message, not the first prose of a chat-provider turn", () => {
+    // pi and Claude Code set no `phase` and stream prose between tool calls; the
+    // turn the transcript was previewing opened with "看懂了目标界面…" while the
+    // actual answer sat 4000 characters further down. `final_answer` holds the
+    // closing block for those providers.
+    const { container } = render(
+      <TurnList
+        turns={[
+          makeTurn({
+            agent_messages: [
+              {
+                text: "Looking at the interface now.",
+                phase: null,
+                timestamp: "",
+                is_reasoning: false,
+              },
+              { text: "Let me read the parser.", phase: null, timestamp: "", is_reasoning: false },
+              {
+                text: "Here is the plan you asked for.",
+                phase: null,
+                timestamp: "",
+                is_reasoning: false,
+              },
+            ],
+            final_answer: "Here is the plan you asked for.",
+          }),
+        ]}
+        selectedIndex={-1}
+        onSelectTurn={vi.fn()}
+      />,
+    );
+
+    const preview = container.querySelector(".message--claude .message__content")!;
+    expect(preview).toHaveTextContent("Here is the plan you asked for.");
+    expect(preview).not.toHaveTextContent("Looking at the interface now.");
+  });
+
+  it("prefers an explicit final_answer phase over the closing prose", () => {
+    // Codex marks the conclusion itself; a late commentary block must not win.
+    const { container } = render(
+      <TurnList
+        turns={[
+          makeTurn({
+            agent_messages: [
+              {
+                text: "The marked answer.",
+                phase: "final_answer",
+                timestamp: "",
+                is_reasoning: false,
+              },
+              {
+                text: "A trailing commentary block.",
+                phase: "commentary",
+                timestamp: "",
+                is_reasoning: false,
+              },
+            ],
+            final_answer: "A trailing commentary block.",
+          }),
+        ]}
+        selectedIndex={-1}
+        onSelectTurn={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector(".message--claude .message__content")).toHaveTextContent(
+      "The marked answer.",
+    );
+  });
+
   it("shows the full user message and the agent preview without any collapse affordance", () => {
     const onSelectTurn = vi.fn();
     const { container } = render(
