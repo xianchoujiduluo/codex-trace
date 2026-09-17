@@ -4,6 +4,21 @@ All notable changes to codex-trace are documented here. Versions follow
 [semantic versioning](https://semver.org/), and this file follows
 [Keep a Changelog](https://keepachangelog.com/) conventions.
 
+## [0.4.20] — 2026-09-17
+
+### Fixed
+
+- **A streaming reply is previewed by its closing paragraph again**. Chat providers write prose
+  between every tool call, and the parser recorded a turn's `final_answer` the first time it saw
+  the turn and then never updated it. The block that closes a turn does not exist that early, so
+  the value stayed frozen on whatever came last at first sight — usually a mid-turn status line
+  like "Now let me verify the critical integration point" — while the detail view, which reads
+  the messages directly, showed the whole answer. If you have seen a reply in the transcript that
+  looked truncated compared to its detail page, this was why; it only happened on turns that were
+  still being written when the session was read.
+
+[0.4.20]: https://github.com/xianchoujiduluo/codex-trace/releases/tag/v0.4.20
+
 ## [0.4.19] — 2026-09-17
 
 ### Added
