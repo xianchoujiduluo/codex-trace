@@ -12,12 +12,12 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "dev:web": "tauri dev -- -- --web",
-    "lint": "oxlint && cargo clippy --manifest-path src-tauri/Cargo.toml",
-    "fmt": "oxfmt && cargo fmt --manifest-path src-tauri/Cargo.toml",
-    "fmt:check": "oxfmt --check && cargo fmt --manifest-path src-tauri/Cargo.toml --check",
-    "test": "vitest run && cargo test --manifest-path src-tauri/Cargo.toml",
+    "lint": "oxlint && cargo clippy --workspace --all-targets",
+    "fmt": "oxfmt && cargo fmt --all",
+    "fmt:check": "oxfmt --check && cargo fmt --all --check",
+    "test": "vitest run && cargo test --workspace",
     "test:watch": "vitest",
-    "check": "tsc --noEmit && oxlint && oxfmt --check && cargo clippy --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path src-tauri/Cargo.toml --check && vitest run && cargo test --manifest-path src-tauri/Cargo.toml"
+    "check": "tsc --noEmit && oxlint && oxfmt --check && cargo clippy --workspace --all-targets && cargo fmt --all --check && vitest run && cargo test --workspace"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

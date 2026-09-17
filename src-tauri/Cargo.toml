@@ -16,6 +16,7 @@ crate-type = ["cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+codex-trace-parser = { path = "../parser" }
 tauri = { version = "2", features = [] }
 tauri-plugin-fs = "2"
 serde = { version = "1", features = ["derive"] }
@@ -39,15 +40,6 @@ reqwest = { version = "0.13", default-features = false, features = ["native-tls"
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }
-
-[profile.dev]
-incremental = true
-
-[profile.release]
-codegen-units = 1
-lto = true
-opt-level = "s"
-strip = true
 
 [dev-dependencies]
 tempfile = "3"

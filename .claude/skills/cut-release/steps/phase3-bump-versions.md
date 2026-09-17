@@ -1,47 +1,46 @@
 # Phase 3 — Bump version files
 
-Goal: bump every version-bearing file to `$NEXT_VERSION` and regenerate the two
-lockfiles.
+Goal: bump every version-bearing file to `$NEXT_VERSION` and regenerate the lockfile.
 
 Refer to `${CLAUDE_SKILL_DIR}/references/project-shape.md` for the rules on which files
 move in lockstep.
 
-## Step 3.1 — Bump root + Cargo + Tauri config (lockstep)
+## Step 3.1 — Bump root + both crates + Tauri config (lockstep)
 
 Use the Edit tool with precise `old_string`/`new_string` (not sed):
 
 - `package.json` — top-level `"version"` field
+- `parser/Cargo.toml` — `[package].version` line
 - `src-tauri/Cargo.toml` — `[package].version` line
 - `src-tauri/tauri.conf.json` — top-level `"version"` field
 
-All three must end up at `$NEXT_VERSION`. `tauri.conf.json` is the one `tauri-action`
+All four must end up at `$NEXT_VERSION`. `tauri.conf.json` is the one `tauri-action`
 reads when stamping artifact filenames at build time (`Codex.Trace_<version>_*.dmg`, etc.,
-from the `productName` "Codex Trace"). Skipping it produces a release whose artifacts are
-stamped with the previous version.
+from the `productName` "Codex Trace"), and `parser/Cargo.toml` versions the crate other
+projects depend on. Skipping either ships a release that disagrees with itself.
 
-## Step 3.2 — Other sub-packages (none currently)
+## Step 3.2 — No other sub-packages
 
-codex-trace has no separate sub-package (TUI or otherwise) carrying its own version
-string. Nothing else to bump here.
+The workspace has exactly the two crates above. If a versioned manifest is ever added
+(e.g. a nested `package.json` or a `pyproject.toml`), bump it in lockstep and update this
+step.
 
-If a versioned manifest (e.g. a nested `package.json` or a `pyproject.toml`) is ever
-added, bump it in lockstep with the root package and update this step.
-
-## Step 3.3 — Regenerate lockfiles
+## Step 3.3 — Regenerate the lockfile
 
 ```bash
 npm install --package-lock-only
-( cd src-tauri && cargo check --offline )
+cargo check --offline
 ```
 
-These commands write the new local-workspace version into the lockfiles. Then verify the
-diff is small and only touches version strings:
+These commands write the new local-workspace version into the lockfile, which is shared by
+the workspace and lives at the repo root. Then verify the diff is small and only touches
+version strings:
 
 ```bash
-git diff --stat -- package.json src-tauri/Cargo.toml src-tauri/tauri.conf.json package-lock.json src-tauri/Cargo.lock
+git diff --stat -- package.json parser/Cargo.toml src-tauri/Cargo.toml src-tauri/tauri.conf.json package-lock.json Cargo.lock
 ```
 
-Expect roughly 6 files changed and around 6 insertions / 6 deletions. A large diff
+Expect roughly 7 files changed and around 7 insertions / 7 deletions. A large diff
 suggests the lockfile was stale or has unrelated dep changes — investigate before
 continuing.
 

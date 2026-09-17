@@ -198,13 +198,13 @@ mod tests {
         assert!(parse_timestamp_secs("2026-04-25T10:00:00Z").is_some());
     }
 
+    #[test]
     fn parse_response_item() {
         let line = r#"{"timestamp":"2026-04-25T10:00:00Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"call_1"}}"#;
         let e = RawEntry::parse(line).unwrap();
         assert_eq!(e.entry_type, "response_item");
         assert_eq!(e.payload["type"], "function_call");
     }
-
     // `response_item` is a JSONL log entry type written by the Codex CLI into session
     // files. It is entirely unrelated to the `codex responses` CLI subcommand that was
     // removed in Codex v0.128.0 (PR #19640). This test guards against that confusion

@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use tauri::{AppHandle, State};
 
-use crate::parser::discover::CodexSessionInfo;
 use crate::state::AppState;
 use crate::watcher::start_picker_watcher;
+use codex_trace_parser::discover::CodexSessionInfo;
 
 #[tauri::command]
 pub async fn list_sessions(

@@ -59,8 +59,8 @@ impl WatcherHandle {
 #[derive(Clone, serde::Serialize)]
 struct SessionUpdatePayload {
     kind: &'static str,
-    session: Option<crate::parser::session::CodexSession>,
-    patch: Option<crate::parser::session::SessionPatch>,
+    session: Option<codex_trace_parser::session::CodexSession>,
+    patch: Option<codex_trace_parser::session::SessionPatch>,
 }
 
 /// True for `rollout-*.jsonl` and `rollout-*.jsonl.zst` files — Codex's background
@@ -138,14 +138,14 @@ pub fn start_session_watcher(
                     };
 
                     let payload = match refresh {
-                        crate::parser::session::SessionRefresh::Unchanged => continue,
-                        crate::parser::session::SessionRefresh::Full {
+                        codex_trace_parser::session::SessionRefresh::Unchanged => continue,
+                        codex_trace_parser::session::SessionRefresh::Full {
                             session,
                             source_size_bytes,
                         } => {
-                            let session = crate::parser::session::page_session(
+                            let session = codex_trace_parser::session::page_session(
                                 session.as_ref(),
-                                crate::parser::session::SessionPageDirection::Backward,
+                                codex_trace_parser::session::SessionPageDirection::Backward,
                                 None,
                                 None,
                                 source_size_bytes,
@@ -158,7 +158,7 @@ pub fn start_session_watcher(
                                 patch: None,
                             }
                         }
-                        crate::parser::session::SessionRefresh::Patch(patch) => {
+                        codex_trace_parser::session::SessionRefresh::Patch(patch) => {
                             state.set_watched_ongoing(path_for_rebuild.clone(), patch.is_ongoing);
                             SessionUpdatePayload {
                                 kind: "patch",
@@ -245,7 +245,7 @@ pub fn start_picker_watcher(
     let signal_tx_clone = signal_tx.clone();
     let sessions_dir_thread = sessions_dir.clone();
     let sessions_dir_async = sessions_dir.clone();
-    let chat_roots: Vec<(crate::parser::provider::Provider, std::path::PathBuf)> =
+    let chat_roots: Vec<(codex_trace_parser::provider::Provider, std::path::PathBuf)> =
         state.chat_roots().to_vec();
 
     std::thread::spawn(move || {
@@ -256,7 +256,7 @@ pub fn start_picker_watcher(
         };
 
         for (_, root) in
-            crate::parser::provider::session_roots(Some(&sessions_dir_thread), &chat_roots)
+            codex_trace_parser::provider::session_roots(Some(&sessions_dir_thread), &chat_roots)
         {
             if root.exists() {
                 let _ = watcher.watch(&root, RecursiveMode::Recursive);

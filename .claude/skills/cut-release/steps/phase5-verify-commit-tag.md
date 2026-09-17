@@ -18,12 +18,15 @@ state.
 ```bash
 git add CHANGELOG.md \
         package.json package-lock.json \
-        src-tauri/Cargo.toml src-tauri/Cargo.lock \
+        Cargo.lock \
+        parser/Cargo.toml \
+        src-tauri/Cargo.toml \
         src-tauri/tauri.conf.json
 git diff --cached --stat
 ```
 
-The staged set must be exactly those six files. Nothing else.
+The staged set must be exactly those seven files. Nothing else. (`Cargo.lock` is the
+single workspace lockfile and lives at the repo root.)
 
 ## Step 5.3 — Write the commit message to a temp file
 

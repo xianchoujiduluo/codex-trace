@@ -499,7 +499,7 @@ async fn api_discover_sessions(
 #[derive(Deserialize)]
 struct PathBody {
     path: String,
-    direction: Option<crate::parser::session::SessionPageDirection>,
+    direction: Option<codex_trace_parser::session::SessionPageDirection>,
     cursor: Option<usize>,
     #[serde(rename = "maxBytes")]
     max_bytes: Option<usize>,
@@ -516,7 +516,7 @@ async fn api_load_session(
         state.load_session_page(
             &body.path,
             body.direction
-                .unwrap_or(crate::parser::session::SessionPageDirection::Backward),
+                .unwrap_or(codex_trace_parser::session::SessionPageDirection::Backward),
             body.cursor,
             body.max_bytes,
         )

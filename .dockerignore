@@ -1,8 +1,11 @@
 *
 !Dockerfile
+!Cargo.toml
+!Cargo.lock
+!parser/
+!parser/**
 !src-tauri/
 !src-tauri/**
 src-tauri/gen/
-src-tauri/target/
 !script/
 !script/docker-entrypoint.sh

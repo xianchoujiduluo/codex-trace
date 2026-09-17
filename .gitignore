@@ -5,7 +5,9 @@ dist/
 .env.*
 
 # Rust
-src-tauri/target/
+# The workspace builds into a single root target/ directory now, so the old
+# src-tauri/target/ entry no longer matches.
+target/
 src-tauri/gen/
 
 # OS

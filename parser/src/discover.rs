@@ -69,8 +69,13 @@ pub struct CodexSessionInfo {
     pub provider: String,
     /// Internal activity-parser state. This is derived during discovery and is not part of the
     /// frontend API; it lets the global watcher continue parsing from the current file offset.
+    ///
+    /// `#[serde(skip)]` is what keeps it out of the frontend payload. The field is `pub` so
+    /// that `codex-trace`'s cache tests can build a fixture entry; before the parser became its
+    /// own crate it was `pub(crate)`, which reached those tests because they lived in the same
+    /// crate.
     #[serde(skip)]
-    pub(crate) has_session_end: bool,
+    pub has_session_end: bool,
 }
 
 fn default_provider_id() -> String {
@@ -144,7 +149,7 @@ pub fn discover_sessions(sessions_dir: &Path) -> Result<Vec<CodexSessionInfo>, S
     Ok(infos)
 }
 
-pub(crate) fn apply_session_index(sessions_dir: &Path, infos: &mut [CodexSessionInfo]) {
+pub fn apply_session_index(sessions_dir: &Path, infos: &mut [CodexSessionInfo]) {
     let indexed_names = read_session_index(sessions_dir);
     for info in infos {
         if let Some(name) = indexed_names.get(&info.id) {

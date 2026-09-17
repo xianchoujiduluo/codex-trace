@@ -16,6 +16,12 @@ pub struct SessionCache {
     entries: HashMap<String, CacheEntry>,
 }
 
+impl Default for SessionCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SessionCache {
     pub fn new() -> Self {
         Self {

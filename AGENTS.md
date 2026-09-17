@@ -20,19 +20,20 @@ npm run dev:web          # Web mode = `tauri dev -- -- --web` (opens browser)
 
 # Lint
 npx oxlint              # JS/TS lint
-cargo clippy --manifest-path src-tauri/Cargo.toml  # Rust lint
+cargo clippy --workspace --all-targets  # Rust lint
 
 # Format
 npx oxfmt               # JS/TS format (npm run fmt also formats Rust)
-cargo fmt --manifest-path src-tauri/Cargo.toml     # Rust format
+cargo fmt --all         # Rust format
 
 # Test
 npx vitest run                                     # all frontend tests
 npx vitest run src/lib/minimap.test.ts             # one file
 npx vitest run -t "some test name"                 # one test by name
-cargo test --manifest-path src-tauri/Cargo.toml                            # all Rust tests
-cargo test --manifest-path src-tauri/Cargo.toml turn::                     # filter (tests are inline `mod tests`)
-cargo test --manifest-path src-tauri/Cargo.toml acl                        # integration test in src-tauri/tests/
+cargo test --workspace                             # all Rust tests (both crates)
+cargo test -p codex-trace-parser                   # just the parser crate
+cargo test -p codex-trace-parser turn::            # filter (tests are inline `mod tests`)
+cargo test --workspace acl                         # integration test in src-tauri/tests/
 sh script/docker-entrypoint.test.sh                # shell tests (run by CI, not by `npm run check`)
 
 # Type check
@@ -47,7 +48,7 @@ npm run check            # tsc + oxlint + oxfmt --check + clippy + cargo fmt --c
 After every code change (src, tests, config that affects build), add tests for the change, then run:
 
 ```bash
-npx oxfmt && npx oxlint && npx tsc --noEmit && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml
+npx oxfmt && npx oxlint && npx tsc --noEmit && cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
 ```
 
 Nothing enforces the command above at commit time — `.claude/settings.json` declares no hooks,
@@ -60,6 +61,12 @@ transport and the `isTauri` guard stay enforced), and bans the default `react` i
 
 ## Architecture
 
+- **Workspace:** two Rust crates under one Cargo workspace, plus the frontend
+  - `parser/` → `codex-trace-parser`: session-log parsing, no Tauri dependency
+  - `src-tauri/` → `codex-trace`: the Tauri app and axum server
+  - Run `cargo` commands with `--workspace` (or `-p <crate>`) from the repo root. The
+    shared `Cargo.lock` and the build output (`target/`) both live at the root, not in
+    `src-tauri/`.
 - **Backend:** Rust + Tauri v2 + axum HTTP server (port 11424)
 - **Frontend:** React 19 + TypeScript + Vite
 - **Sessions:** `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`
@@ -69,13 +76,13 @@ transport and the `isTauri` guard stay enforced), and bans the default `react` i
 Sessions from multiple coding agents are normalised into the same CodexTurn/ToolCall
 model and tagged with a `provider` id (`"codex" | "claude" | "pi"`):
 
-- `src-tauri/src/parser/provider.rs` — `Provider` enum, per-agent log roots
+- `parser/src/provider.rs` — `Provider` enum, per-agent log roots
   (Codex `~/.codex/sessions`, Claude Code `~/.claude/projects`, pi `~/.pi/agent/sessions`),
   path-based detection, cross-provider discovery merge
-- `src-tauri/src/parser/chat.rs` — generic "chat-style" JSONL engine (adapters turn raw
+- `parser/src/chat.rs` — generic "chat-style" JSONL engine (adapters turn raw
   lines into `ChatEvent`s; `ChatSessionBuilder` emits the shared turn model; byte-offset
   incremental refresh) used by Claude Code and pi; Codex keeps its native pipeline
-- `parse_session` / `SessionHandle` in `parser/session.rs` dispatch by detected provider;
+- `parse_session` / `SessionHandle` in `parser/src/session.rs` dispatch by detected provider;
   `AppState` carries injectable `chat_roots` (tests pass `Vec::new()` to stay isolated
   from the machine's real agent homes)
 - Adding a new agent: implement a `ChatAdapter` + scanner in `chat.rs` (or a native parser),
@@ -118,18 +125,19 @@ ports before launching).
 
 ### Key files
 
-- `src-tauri/src/parser/` — JSONL parsing pipeline
-  - `entry.rs` — raw line parsing, format detection
-  - `discover.rs` — session discovery + metadata scan
-  - `session.rs` — full session parse (+ pagination direction)
-  - `turn.rs` — turn boundary detection (new + old format)
-  - `toolcall.rs` — tool call classification by end event
-  - `compression.rs` — transparent zstd-compressed rollout reading
-  - `cache.rs` — session metadata cache (mtime-keyed)
-  - `activity.rs` — session activity tracking / path collection
-  - `ongoing.rs` — ongoing-session detection
-  - `redact.rs` — display-time secret redaction for exec commands
-  - `spawn.rs` — collaboration agent spawn parsing
+- `parser/` — the JSONL parsing pipeline, a standalone crate (`codex-trace-parser`) with
+  no Tauri dependency, so other tools can depend on it directly
+  - `src/entry.rs` — raw line parsing, format detection
+  - `src/discover.rs` — session discovery + metadata scan
+  - `src/session.rs` — full session parse (+ pagination direction)
+  - `src/turn.rs` — turn boundary detection (new + old format)
+  - `src/toolcall.rs` — tool call classification by end event
+  - `src/compression.rs` — transparent zstd-compressed rollout reading
+  - `src/cache.rs` — session metadata cache (mtime-keyed)
+  - `src/activity.rs` — session activity tracking / path collection
+  - `src/ongoing.rs` — ongoing-session detection
+  - `src/redact.rs` — display-time secret redaction for exec commands
+  - `src/spawn.rs` — collaboration agent spawn parsing
 - `src-tauri/src/http_api.rs` — axum routes (port 11424) + SSE `/api/events` for live tailing,
   static `ServeDir`, frontend self-update (`update_frontend_html`, env-configurable URL/proxy)
 - `src-tauri/src/commands/` — Tauri IPC commands (picker, session, settings)

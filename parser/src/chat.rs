@@ -1700,9 +1700,9 @@ mod tests {
         {
             use std::io::Write;
             let mut file = fs::OpenOptions::new().append(true).open(&path).unwrap();
-            write!(
+            writeln!(
                 file,
-                "06:30.000Z\",\"message\":{{\"role\":\"user\",\"content\":[{{\"type\":\"text\",\"text\":\"flushed\"}}]}}}}\n"
+                "06:30.000Z\",\"message\":{{\"role\":\"user\",\"content\":[{{\"type\":\"text\",\"text\":\"flushed\"}}]}}}}"
             )
             .unwrap();
         }

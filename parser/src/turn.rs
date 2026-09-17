@@ -1977,7 +1977,7 @@ fn spawn_from_function_call_output(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::toolcall::ToolKind;
+    use crate::toolcall::ToolKind;
 
     fn entries(lines: &[&str]) -> Vec<RawEntry> {
         lines
@@ -4085,7 +4085,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         for (entry, expected) in parsed.iter().zip(expected_entry_types.iter()) {
             assert_eq!(
@@ -4347,7 +4347,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(turns.len(), 1);
@@ -4376,7 +4376,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(turns.len(), 1);
@@ -4452,7 +4452,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(turns.len(), 1);
@@ -4460,7 +4460,7 @@ mod tests {
         let tool = &turns[0].tool_calls[0];
         assert_eq!(
             tool.kind,
-            crate::parser::toolcall::ToolKind::McpTool,
+            crate::toolcall::ToolKind::McpTool,
             "tool should be classified as McpTool via dynamic_tools registry"
         );
         assert_eq!(tool.mcp_server.as_deref(), Some("my-server"));
@@ -4479,7 +4479,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(turns.len(), 1);
@@ -4487,7 +4487,7 @@ mod tests {
         let tool = &turns[0].tool_calls[0];
         assert_eq!(
             tool.kind,
-            crate::parser::toolcall::ToolKind::McpTool,
+            crate::toolcall::ToolKind::McpTool,
             "namespace-qualified tool name must be classified as McpTool"
         );
         assert_eq!(tool.mcp_server.as_deref(), Some("my-server"));
@@ -4507,7 +4507,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(turns.len(), 1);
@@ -4527,7 +4527,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(turns.len(), 1);
@@ -4552,7 +4552,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(turns.len(), 1);
@@ -4574,7 +4574,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(turns.len(), 1);
@@ -4599,7 +4599,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(
@@ -4624,7 +4624,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(turns.len(), 1);
@@ -4654,7 +4654,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(turns.len(), 1);
@@ -4676,7 +4676,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(turns.len(), 1);
@@ -4695,7 +4695,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(turns.len(), 1);
@@ -4717,7 +4717,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(turns.len(), 1);
@@ -4739,7 +4739,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(turns.len(), 1);
@@ -4764,7 +4764,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(turns.len(), 2);
@@ -4788,7 +4788,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(turns.len(), 1);
@@ -4816,7 +4816,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         // Exactly one turn — voice items must not create synthetic turns
@@ -4847,7 +4847,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(
@@ -4880,7 +4880,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(
@@ -4909,7 +4909,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(turns.len(), 1);
@@ -4933,7 +4933,7 @@ mod tests {
         ];
         let parsed: Vec<_> = lines
             .iter()
-            .filter_map(|line| crate::parser::entry::RawEntry::parse(line))
+            .filter_map(|line| crate::entry::RawEntry::parse(line))
             .collect();
         let turns = build_turns(&parsed);
         assert_eq!(turns.len(), 1);

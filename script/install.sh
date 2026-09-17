@@ -23,7 +23,23 @@ if [ "$OS" = "Darwin" ]; then
   echo "==> Building macOS .app bundle (tauri build)..."
   npx tauri build --bundles app
 
-  APP_SRC="src-tauri/target/release/bundle/macos/Codex Trace.app"
+  # The parser lives in its own crate, so this is a Cargo workspace and the
+  # artifacts land in the target directory of the workspace root rather than in
+  # src-tauri/. Check both locations so the script works either way.
+  APP_SRC=""
+  for candidate in \
+    "target/release/bundle/macos/Codex Trace.app" \
+    "src-tauri/target/release/bundle/macos/Codex Trace.app"
+  do
+    if [ -d "$candidate" ]; then
+      APP_SRC="$candidate"
+      break
+    fi
+  done
+  if [ -z "$APP_SRC" ]; then
+    echo "Error: could not find the built .app bundle under target/ or src-tauri/target/." >&2
+    exit 1
+  fi
   APP_DEST="/Applications/Codex Trace.app"
 
   echo "==> Installing to ${APP_DEST}..."

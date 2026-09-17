@@ -3,14 +3,14 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::broadcast;
 
-use crate::parser::activity::ActivityTracker;
-use crate::parser::discover::CodexSessionInfo;
-use crate::parser::provider;
-use crate::parser::session::{
-    page_session, CodexSession, SessionHandle, SessionPageDirection, SessionRefresh, SessionStatus,
-};
 use crate::settings::Settings;
 use crate::watcher::WatcherHandle;
+use codex_trace_parser::activity::ActivityTracker;
+use codex_trace_parser::discover::CodexSessionInfo;
+use codex_trace_parser::provider;
+use codex_trace_parser::session::{
+    page_session, CodexSession, SessionHandle, SessionPageDirection, SessionRefresh, SessionStatus,
+};
 
 /// A Server-Sent Event destined for browser clients.
 #[derive(Clone, Debug)]
@@ -355,7 +355,7 @@ impl AppState {
                             }
                         }
                         if result.picker_metadata_changed {
-                            crate::parser::discover::apply_session_index(
+                            codex_trace_parser::discover::apply_session_index(
                                 std::path::Path::new(sessions_dir),
                                 &mut cache.sessions,
                             );
@@ -650,7 +650,7 @@ mod tests {
         assert_eq!(completed.updated_turns.len(), 1);
         assert_eq!(
             completed.updated_turns[0].status,
-            crate::parser::turn::TurnStatus::Complete
+            codex_trace_parser::turn::TurnStatus::Complete
         );
 
         let unchanged = state

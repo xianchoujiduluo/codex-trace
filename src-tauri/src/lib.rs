@@ -2,7 +2,6 @@
 
 mod commands;
 mod http_api;
-mod parser;
 mod settings;
 mod state;
 mod watcher;

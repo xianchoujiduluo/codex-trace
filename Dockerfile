@@ -43,6 +43,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /build
 
+# The workspace root plus both members are needed: src-tauri depends on the
+# parser crate by path, and Cargo resolves the workspace from the root manifest.
+# The shared lockfile also lives at the root now.
+COPY Cargo.toml ./Cargo.toml
+COPY Cargo.lock ./Cargo.lock
+COPY parser ./parser
 COPY src-tauri ./src-tauri
 
 WORKDIR /build/src-tauri
@@ -72,7 +78,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY --from=backend-builder /build/src-tauri/target/release/codex-trace /usr/local/bin/codex-trace
+# Cargo builds a workspace into the target directory of the workspace root
+# (`/build/target`), not into a member's directory, so the binary is not under
+# src-tauri/ any more.
+COPY --from=backend-builder /build/target/release/codex-trace /usr/local/bin/codex-trace
 COPY script/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 

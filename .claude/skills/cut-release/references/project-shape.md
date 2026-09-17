@@ -15,20 +15,23 @@ codebase, this file points at the source of truth rather than repeating it.
 
 ## Version-bearing files (skill-specific rule)
 
-Three files must agree on the next-version string. Nothing in the codebase enforces this
+Four files must agree on the next-version string. Nothing in the codebase enforces this
 sync — the skill does.
 
 | File                        | Owns                                 | Bumps with                     |
 | --------------------------- | ------------------------------------ | ------------------------------ |
-| `package.json` (root)       | Node/TS workspace + binary entry     | the Rust crate (lockstep)      |
-| `src-tauri/Cargo.toml`      | Rust crate version                   | root `package.json` (lockstep) |
-| `src-tauri/tauri.conf.json` | Tauri bundle filenames + app version | the Rust crate (lockstep)      |
+| `package.json` (root)       | Node/TS workspace + binary entry     | the Rust crates (lockstep)     |
+| `parser/Cargo.toml`         | the `codex-trace-parser` crate       | root `package.json` (lockstep) |
+| `src-tauri/Cargo.toml`      | the `codex-trace` app crate          | root `package.json` (lockstep) |
+| `src-tauri/tauri.conf.json` | Tauri bundle filenames + app version | the app crate (lockstep)       |
 
-Root + Cargo + `tauri.conf.json` move together because the desktop binary the user installs
-is built from all three — `tauri.conf.json`'s `version` field is what `tauri-action`
-templates into the released artifact filenames (`Codex.Trace_<version>_*.dmg`, etc., from
-the `productName` "Codex Trace"). Missing this file silently ships a release whose
-artifacts are stamped with the previous version.
+All four move together because the desktop binary the user installs is built from the
+workspace — `tauri.conf.json`'s `version` field is what `tauri-action` templates into the
+released artifact filenames (`Codex.Trace_<version>_*.dmg`, etc., from the `productName`
+"Codex Trace"). Missing `tauri.conf.json` silently ships a release whose artifacts are
+stamped with the previous version; missing `parser/Cargo.toml` leaves the published
+parser crate version behind (it is now consumable from other projects, so its version is
+part of the public surface).
 
 There is currently no separate sub-package (TUI or otherwise) with its own version
 manifest. If a versioned manifest is ever introduced (e.g. a `pyproject.toml` or a nested
@@ -40,13 +43,13 @@ The lockfiles embed the local workspace's version, so they have to be regenerate
 editing version files — `npm run check` won't fix this on its own. Run:
 
 ```bash
-npm install --package-lock-only           # → package-lock.json
-( cd src-tauri && cargo check --offline ) # → src-tauri/Cargo.lock
+npm install --package-lock-only   # → package-lock.json
+cargo check --offline             # → Cargo.lock (workspace root)
 ```
 
 `--package-lock-only` skips the full reinstall (nothing in `node_modules` needs to
-change) and `--offline` skips the registry round-trip — only the local crate's version
-moved.
+change) and `--offline` skips the registry round-trip — only the local crates' version
+moved. The lockfile is shared by the whole workspace and lives at the repo root.
 
 ## Release pipeline (delegated to CI)
 
