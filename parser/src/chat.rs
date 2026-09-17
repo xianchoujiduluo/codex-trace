@@ -824,14 +824,18 @@ impl ChatSessionBuilder {
                     turn.duration_ms = Some(completed.saturating_sub(started) * 1000);
                 }
             }
-            if turn.final_answer.is_none() {
-                turn.final_answer = turn
-                    .agent_messages
-                    .iter()
-                    .rev()
-                    .find(|message| !message.is_reasoning)
-                    .map(|message| message.text.clone());
-            }
+            // Recomputed every time rather than only when empty. Chat transcripts stream prose
+            // between tool calls, so the block that closes the turn does not exist yet when the
+            // turn first appears; an `is_none()` guard froze the value at whatever prose happened
+            // to be last at that moment, and every later block — including the actual conclusion
+            // — was ignored. The transcript then previewed a mid-turn status line while the
+            // detail view (which walks `agent_messages` directly) showed the full answer.
+            turn.final_answer = turn
+                .agent_messages
+                .iter()
+                .rev()
+                .find(|message| !message.is_reasoning)
+                .map(|message| message.text.clone());
         }
     }
 
