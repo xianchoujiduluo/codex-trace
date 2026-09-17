@@ -94,8 +94,47 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-  build-macos:
+  # Creates the draft release before any build runs, so every `tauri-action`
+  # invocation takes its "found an existing release, upload the bundles" path
+  # instead of its "create the release" path. That path has been failing with
+  # `Resource not accessible by integration` for v0.4.18 onward, despite the
+  # token holding `contents: write`, the action commit being unchanged since the
+  # last working release, and a tag-push probe being able to create a release
+  # with the same token. Creating it here with `gh` — which the probe proved
+  # works — removes the dependency on whatever differs inside the action.
+  #
+  # `--target` is deliberately omitted: on a `push` event the tag already exists,
+  # and `tauri-action` only needs a draft for this tag to attach to.
+  prepare-release:
+    name: Create the draft release
     needs: notes
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create the draft if it does not exist yet
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          NOTES: ${{ needs.notes.outputs.body }}
+        run: |
+          set -euo pipefail
+          STATE=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' 2>/dev/null || echo "missing")
+          if [ "$STATE" = "missing" ]; then
+            printf '%s\n' "$NOTES" > /tmp/notes.md
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$TAG" \
+              --notes-file /tmp/notes.md \
+              --draft
+            echo "Created draft release $TAG"
+          else
+            echo "Release $TAG already exists (draft=$STATE); leaving it alone"
+          fi
+
+  build-macos:
+    needs: [notes, prepare-release]
     if: github.event_name == 'push'
     runs-on: macos-latest
     permissions:
@@ -132,7 +171,7 @@ jobs:
           prerelease: false
 
   build-linux:
-    needs: notes
+    needs: [notes, prepare-release]
     if: github.event_name == 'push'
     runs-on: ubuntu-22.04
     permissions:
@@ -174,7 +213,7 @@ jobs:
           prerelease: false
 
   build-windows:
-    needs: notes
+    needs: [notes, prepare-release]
     if: github.event_name == 'push'
     runs-on: windows-latest
     permissions:
@@ -312,6 +351,7 @@ jobs:
       [
         guard,
         notes,
+        prepare-release,
         build-macos,
         build-linux,
         build-windows,

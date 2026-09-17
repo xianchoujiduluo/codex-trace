@@ -93,6 +93,24 @@ gh release edit "v$NEXT_VERSION" \
   --latest
 ```
 
+### `Resource not accessible by integration` from a build job
+
+If a `build-*` job fails in its `Build Tauri app` step with that message while the
+build itself compiled, the action could not create the release. The workflow now
+prevents this by creating the draft in `prepare-release` first, so a fresh occurrence
+means that job did not run or the release was removed mid-flight. Confirm the draft
+exists for the tag, and if it does not:
+
+```bash
+awk -v v="$NEXT_VERSION" '$0 ~ "^## \\[" v "\\]" {i=1;print;next} i && /^## \[/ {exit} i {print}' \
+  CHANGELOG.md > /tmp/notes.md
+gh release create "v$NEXT_VERSION" --draft --title "v$NEXT_VERSION" --notes-file /tmp/notes.md
+gh run rerun "$RUN_ID" --failed
+```
+
+The rerun now finds an existing release and only uploads to it, which is the path that
+works. Do not force-push the tag.
+
 If the artifacts didn't build, fix the cause and cut a new tag (`vX.Y.Z+1`) — never
 "rescue" a half-built release by force-pushing the tag.
 

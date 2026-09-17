@@ -62,9 +62,15 @@ pushes:
 2. `notes` — slices `CHANGELOG.md` for the version's section and exposes it as a
    workflow output. Fails if the heading isn't in the exact `## [X.Y.Z] — YYYY-MM-DD`
    format.
-3. `build-macos` / `build-linux` / `build-windows` — three parallel `tauri-action` runs
-   each creating / updating a draft release with platform artifacts.
-4. `publish` — flips the draft to public and marks it latest.
+3. `prepare-release` — creates the draft release with `gh` before any build starts, so
+   each `tauri-action` run takes its "existing release, upload bundles" path rather than
+   its create path. See the comment on the job for why: from v0.4.18 the action's own
+   creation step failed with `Resource not accessible by integration` even though the
+   token held `contents: write` and the action commit had not changed since the last
+   working release. Preparing the draft up front sidesteps that entirely.
+4. `build-macos` / `build-linux` / `build-windows` — three parallel `tauri-action` runs
+   attaching platform artifacts to the draft prepared above.
+5. `publish` — flips the draft to public and marks it latest.
 
 `workflow_dispatch` mode (manual run, with a `version` input) is the artifact-free
 path: the `manual-release` job runs `notes` then creates the `vX.Y.Z` tag and a
