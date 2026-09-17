@@ -4,6 +4,19 @@ All notable changes to codex-trace are documented here. Versions follow
 [semantic versioning](https://semver.org/), and this file follows
 [Keep a Changelog](https://keepachangelog.com/) conventions.
 
+## [0.4.21] — 2026-09-18
+
+### Fixed
+
+- **Releases build again on every platform**. From 0.4.18 the macOS, Linux and Windows build
+  jobs failed while creating the GitHub release, with `Resource not accessible by integration`,
+  even though the app itself compiled and the token held write access. The release is now
+  created by the workflow before the builds start, so each build only attaches its artifacts to
+  an existing release. If you were watching the releases page and saw a version published with
+  no desktop installers, this is why — those had to be published by hand.
+
+[0.4.21]: https://github.com/xianchoujiduluo/codex-trace/releases/tag/v0.4.21
+
 ## [0.4.20] — 2026-09-17
 
 ### Fixed
