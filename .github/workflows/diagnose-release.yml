@@ -1,0 +1,33 @@
+name: Diagnose release creation
+
+# Temporary: finds out whether GITHUB_TOKEN can create a release from a job with
+# `contents: write`, which is what tauri-action needs and what started failing.
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Report the token's permissions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "repo: $GITHUB_REPOSITORY"
+          gh api "repos/$GITHUB_REPOSITORY" --jq '"repo perms: \(.permissions)"' 2>&1 || true
+          echo "--- release creation probe ---"
+          TAG="diagnose-${{ github.run_id }}"
+          if gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "diagnose" \
+              --notes "temporary probe" \
+              --draft; then
+            echo "RESULT: create SUCCEEDED"
+            gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+          else
+            echo "RESULT: create FAILED (exit $?)"
+          fi
