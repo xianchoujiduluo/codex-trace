@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type {
   AgentMessage,
@@ -85,6 +85,12 @@ function scrollMessageList(container: HTMLElement, scrollTop: number) {
   const list = container.querySelector<HTMLElement>(".message-list")!;
   Object.defineProperty(list, "scrollTop", { value: scrollTop, configurable: true });
   fireEvent.scroll(list);
+}
+
+/** Index of the rail tick currently marked active, or -1 when none is. */
+function activeTickIndex(): number {
+  const ticks = screen.getAllByRole("button", { name: /Jump to question/ });
+  return ticks.findIndex((tick) => tick.classList.contains("turn-minimap__tick--active"));
 }
 
 function makeTurn(overrides: Partial<CodexTurn> = {}): CodexTurn {
@@ -650,6 +656,114 @@ describe("TurnList chat layout", () => {
     const ticks = screen.getAllByRole("button", { name: /Jump to question/ });
     expect(ticks[0]).not.toHaveClass("turn-minimap__tick--active");
     expect(ticks[1]).toHaveClass("turn-minimap__tick--active");
+  });
+
+  it("moves the active question tick to follow the transcript scroll", async () => {
+    // The rail marks where the reader is, not where they last clicked: scrolling
+    // to a different turn must move the mark, which is what the reader reported
+    // missing when they scrolled or jumped with the rail itself.
+    const { container } = render(
+      <TurnList
+        turns={[
+          makeTurn({ turn_id: "t1", user_message: "First question" }),
+          makeTurn({ turn_id: "t2", user_message: "Second question" }),
+          makeTurn({ turn_id: "t3", user_message: "Third question" }),
+        ]}
+        selectedIndex={0}
+        onSelectTurn={vi.fn()}
+      />,
+    );
+
+    const list = container.querySelector<HTMLElement>(".message-list")!;
+    // jsdom reports every rect as zero, so give the container a viewport and
+    // give each turn a position; the hook reads exactly these values. The
+    // container must be scrollable (scrollHeight > clientHeight) or the hook
+    // treats it as already at the bottom.
+    Object.defineProperty(list, "clientHeight", { value: 400, configurable: true });
+    Object.defineProperty(list, "scrollHeight", { value: 2000, configurable: true });
+    Object.defineProperty(list, "getBoundingClientRect", {
+      value: () => ({ top: 0, bottom: 400, left: 0, right: 800, width: 800, height: 400 }),
+      configurable: true,
+    });
+    Object.defineProperty(list, "scrollTop", { value: 500, configurable: true });
+    // Turns are laid out top-to-bottom, so the tops must ascend in document
+    // order; the hook walks them and keeps the last one at or above the edge.
+    const tops = [0, 200, 400];
+    container.querySelectorAll<HTMLElement>("[data-turn-index]").forEach((turn, i) => {
+      Object.defineProperty(turn, "getBoundingClientRect", {
+        value: () => ({
+          top: tops[i],
+          bottom: tops[i] + 200,
+          left: 0,
+          right: 800,
+          width: 800,
+          height: 200,
+        }),
+        configurable: true,
+      });
+    });
+
+    // Scroll until the second turn sits at the top edge.
+    tops[0] = -400;
+    tops[1] = -20;
+    tops[2] = 180;
+    fireEvent.scroll(list);
+
+    // The hook measures inside requestAnimationFrame to coalesce scroll events.
+    await waitFor(() => expect(activeTickIndex()).toBe(1));
+  });
+
+  it("marks the first question while a short transcript is not scrolled", async () => {
+    // When every turn already fits there is no "bottom" to be at. Treating
+    // `scrollHeight === clientHeight` as the bottom marked the *last* turn on a
+    // transcript the reader had not scrolled at all.
+    //
+    // The initial selection is deliberately NOT the expected answer: if the
+    // measurement never ran, the highlight would simply stay on the selection
+    // and the assertion would pass without testing anything.
+    const { container } = render(
+      <TurnList
+        turns={[
+          makeTurn({ turn_id: "t1", user_message: "First question" }),
+          makeTurn({ turn_id: "t2", user_message: "Second question" }),
+          makeTurn({ turn_id: "t3", user_message: "Third question" }),
+        ]}
+        selectedIndex={2}
+        onSelectTurn={vi.fn()}
+      />,
+    );
+
+    const list = container.querySelector<HTMLElement>(".message-list")!;
+    // Fits without scrolling: equal heights, nothing scrolled. Read through
+    // getters so the values survive whatever jsdom does to the element later.
+    Object.defineProperty(list, "clientHeight", { get: () => 400, configurable: true });
+    Object.defineProperty(list, "scrollHeight", { get: () => 400, configurable: true });
+    Object.defineProperty(list, "scrollTop", { get: () => 0, configurable: true });
+    Object.defineProperty(list, "getBoundingClientRect", {
+      value: () => ({ top: 0, bottom: 400, left: 0, right: 800, width: 800, height: 400 }),
+      configurable: true,
+    });
+    // Every turn sits just below the top edge, which is the state a transcript
+    // that fits is in: the "nearest the top" rule finds nothing and falls back
+    // to the first turn. Without the scrollable guard the at-bottom rule fires
+    // instead (equal heights) and hands the mark to the *last* turn.
+    const tops = [10, 160, 310];
+    container.querySelectorAll<HTMLElement>("[data-turn-index]").forEach((turn, i) => {
+      Object.defineProperty(turn, "getBoundingClientRect", {
+        value: () => ({
+          top: tops[i],
+          bottom: tops[i] + 150,
+          left: 0,
+          right: 800,
+          width: 800,
+          height: 150,
+        }),
+        configurable: true,
+      });
+    });
+
+    fireEvent.scroll(list);
+    await waitFor(() => expect(activeTickIndex()).toBe(0));
   });
 
   it("scrolls to the turn when its minimap tick is clicked", () => {

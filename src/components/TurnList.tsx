@@ -11,6 +11,7 @@ import type { CodexTurn, SessionPagination } from "../../shared/types";
 import { displayedTokenTotal, formatDuration, formatTokens } from "../../shared/format";
 import { formatExactTime } from "../lib/format";
 import { useAutoScroll } from "../hooks/useAutoScroll";
+import { useActiveTurn } from "../hooks/useActiveTurn";
 import { useScrollToSelected } from "../hooks/useScrollToSelected";
 import { OngoingDots } from "./OngoingDots";
 import { BackIcon, CodexIcon, ForwardIcon, TokensIcon, DurationIcon, ToolsIcon } from "./Icons";
@@ -99,6 +100,10 @@ export function TurnList({
   );
   const listRef = useAutoScroll<HTMLDivElement>(visibleTurns.length);
   const selectedRef = useScrollToSelected(selectedIndex);
+  // The rail marks where the reader actually is, which is a scroll position
+  // rather than the selection: clicking a turn jumps to it, and jumping with
+  // the rail itself must move the mark too.
+  const activeTurnIndex = useActiveTurn(listRef, visibleTurns.length);
   // Tool calls and reasoning are the noisy part of a turn, so they start hidden
   // and each assistant message carries its own toggle for them.
   const [openActivity, setOpenActivity] = useState<Set<number>>(new Set());
@@ -189,10 +194,23 @@ export function TurnList({
     return () => observer.disconnect();
   }, [hasMinimap]);
 
+  // Which question the rail should mark. Every turn's index is absolute, while
+  // the rail holds one tick per question, so the active turn maps to the last
+  // question at or before it — the question whose answer the reader is inside.
+  const railAnchorIndex = useMemo(() => {
+    if (activeTurnIndex === null) return selectedIndex;
+    let anchor: number | null = null;
+    for (const { index } of questionTurns) {
+      if (index <= activeTurnIndex) anchor = index;
+      else break;
+    }
+    return anchor ?? questionTurns[0]?.index ?? selectedIndex;
+  }, [activeTurnIndex, questionTurns, selectedIndex]);
+
   const layout = minimapLayout(
     questionTurns.length,
     minimapHeight || undefined,
-    questionTurns.findIndex(({ index }) => index === selectedIndex),
+    questionTurns.findIndex(({ index }) => index === railAnchorIndex),
   );
   const visibleTicks = layout.indices
     .map((i) => questionTurns[i])
@@ -212,7 +230,7 @@ export function TurnList({
               <button
                 key={turn.turn_id}
                 type="button"
-                className={`turn-minimap__tick${i === selectedIndex ? " turn-minimap__tick--active" : ""}`}
+                className={`turn-minimap__tick${i === railAnchorIndex ? " turn-minimap__tick--active" : ""}`}
                 aria-label={`Jump to question: ${(turn.user_message ?? "").slice(0, 60)}`}
                 onClick={() => scrollToTurn(i)}
               >
