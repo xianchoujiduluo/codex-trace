@@ -4,6 +4,39 @@ All notable changes to codex-trace are documented here. Versions follow
 [semantic versioning](https://semver.org/), and this file follows
 [Keep a Changelog](https://keepachangelog.com/) conventions.
 
+## [0.4.19] — 2026-09-17
+
+### Added
+
+- **The parser is now its own crate**, `codex-trace-parser`, with no dependency on Tauri. Other
+  tools can depend on it directly and reuse the same turn and tool-call model instead of
+  reimplementing it. `codex-trace` itself is unchanged: the same sessions parse to the same
+  output, verified by dumping every session under `~/.codex`, `~/.pi` and `~/.claude` through
+  both the old and the new parser and diffing — 6.6 MB, 9.9 MB and 4.7 MB of text, byte-identical.
+
+### Fixed
+
+- **Sessions made of short turns loaded far more than one page**. A session whose file was
+  under 10 MiB came back whole no matter how many turns it held, so a long conversation of
+  small turns opened with everything in it and the "load older turns" affordance never
+  appeared. Pages are now sized by turn count for every session (ten at a time, about one
+  screen), with the byte budget kept as the safety valve for a single enormous turn. 41 of the
+  137 sessions on this machine were in that gap; one was 111 turns in 3.5 MiB.
+- **The question rail marks where you are, not where you last clicked**. Scrolling the
+  transcript — or jumping with the rail itself — left the highlight behind on the previously
+  selected turn. The mark now follows the scroll position, staying on the question whose answer
+  is under the top of the viewport.
+- **Opening a session lands on its newest turn** rather than the top of the loaded backlog.
+
+### Changed
+
+- **The Rust side is a Cargo workspace**, so `cargo` commands take `--workspace` and the
+  shared `Cargo.lock` and build output live at the repository root. `npm run check` and CI were
+  updated accordingly; the previous `--manifest-path src-tauri/Cargo.toml` form silently skipped
+  every parser test.
+
+[0.4.19]: https://github.com/xianchoujiduluo/codex-trace/releases/tag/v0.4.19
+
 ## [0.4.18] — 2026-09-16
 
 ### Added

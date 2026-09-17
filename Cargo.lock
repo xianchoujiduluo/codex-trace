@@ -541,7 +541,7 @@ dependencies = [
 
 [[package]]
 name = "codex-trace"
-version = "0.4.18"
+version = "0.4.19"
 dependencies = [
  "axum",
  "chrono",
@@ -570,7 +570,7 @@ dependencies = [
 
 [[package]]
 name = "codex-trace-parser"
-version = "0.4.18"
+version = "0.4.19"
 dependencies = [
  "chrono",
  "dirs",
