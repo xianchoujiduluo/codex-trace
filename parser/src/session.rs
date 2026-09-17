@@ -676,12 +676,18 @@ impl SessionHandle {
 
 /// Return either the complete session or a turn-aligned page for a large session.
 ///
-/// The small-session shortcut below is deliberate: a transcript under
-/// [`FULL_SESSION_THRESHOLD_BYTES`] opens instantly either way, and loading it
-/// whole is what lets in-session search, the question minimap and previous/next
-/// reply navigation see the entire conversation. Applying a page to it would
-/// silently narrow those to the newest turns. Large sessions have always been
-/// paged; this is the path that was returning too much per page.
+/// A session that already fits in one page is returned whole. This is not just
+/// an optimisation: the complete transcript is what lets in-session search, the
+/// question minimap and previous/next reply navigation see the whole
+/// conversation, and it saves the caller a follow-up request. The test is
+/// **turn count**, matching the page limit, because a byte threshold and a turn
+/// limit disagree: a 20-turn session of small turns sits well under
+/// [`FULL_SESSION_THRESHOLD_BYTES`], so it came back whole — more turns than a
+/// page is allowed to contain — and the reader saw a different amount depending
+/// on how large the turns happened to be.
+///
+/// [`FULL_SESSION_THRESHOLD_BYTES`] is still consulted so an unusually large
+/// page (few turns, huge bodies) is paged instead of serialised whole.
 pub fn page_session(
     session: &CodexSession,
     direction: SessionPageDirection,
@@ -689,7 +695,10 @@ pub fn page_session(
     max_bytes: Option<usize>,
     source_size_bytes: u64,
 ) -> Result<CodexSession, String> {
-    if source_size_bytes <= FULL_SESSION_THRESHOLD_BYTES && cursor.is_none() {
+    if cursor.is_none()
+        && session.turns.len() <= DEFAULT_SESSION_PAGE_TURNS
+        && source_size_bytes <= FULL_SESSION_THRESHOLD_BYTES
+    {
         return Ok(session.clone());
     }
 
@@ -2828,8 +2837,15 @@ mod tests {
 
         let session = parse_session(&path).unwrap();
         assert_eq!(session.turns.len(), turn_count);
+        // The real file size, which is what exposed the bug: 30 small turns sit
+        // far below the byte threshold, so a byte-based shortcut returned all of
+        // them and the page limit never applied.
         let source_size_bytes = std::fs::metadata(&path).unwrap().len();
         assert!(source_size_bytes > 0);
+        assert!(
+            source_size_bytes < FULL_SESSION_THRESHOLD_BYTES,
+            "fixture must stay under the byte threshold to cover the bug"
+        );
 
         // No maxBytes: the defaults decide, and the default must be the turn count.
         let page = page_session(
@@ -2837,7 +2853,7 @@ mod tests {
             SessionPageDirection::Backward,
             None,
             None,
-            FULL_SESSION_THRESHOLD_BYTES + 1,
+            source_size_bytes,
         )
         .unwrap();
         assert_eq!(page.turns.len(), DEFAULT_SESSION_PAGE_TURNS);
@@ -2858,12 +2874,70 @@ mod tests {
             SessionPageDirection::Backward,
             Some(boundary),
             None,
-            FULL_SESSION_THRESHOLD_BYTES + 1,
+            source_size_bytes,
         )
         .unwrap();
         assert_eq!(older.turns.len(), DEFAULT_SESSION_PAGE_TURNS);
         assert_eq!(older.turns.last().unwrap().turn_id, "turn-19");
         assert_eq!(older.turns[0].turn_id, "turn-10");
+    }
+
+    #[test]
+    fn a_session_that_fits_one_page_comes_back_whole() {
+        // The shortcut is what keeps in-session search, the minimap and reply
+        // navigation able to see the whole conversation, and it saves the caller
+        // a follow-up request. It is bounded by the turn count now, so "fits one
+        // page" means exactly that.
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("rollout-small.jsonl");
+        let mut lines = vec![
+            r#"{"timestamp":"2026-08-18T11:00:00Z","type":"session_meta","payload":{"id":"small","timestamp":"2026-08-18T11:00:00Z"}}"#.to_string(),
+        ];
+        for index in 0..DEFAULT_SESSION_PAGE_TURNS {
+            lines.push(format!(
+                r#"{{"timestamp":"2026-08-18T11:{index:02}:00Z","type":"event_msg","payload":{{"type":"task_started","turn_id":"turn-{index}"}}}}"#
+            ));
+            lines.push(format!(
+                r#"{{"timestamp":"2026-08-18T11:{index:02}:01Z","type":"event_msg","payload":{{"type":"agent_message","message":"reply {index}","phase":"final_answer"}}}}"#
+            ));
+            lines.push(format!(
+                r#"{{"timestamp":"2026-08-18T11:{index:02}:02Z","type":"event_msg","payload":{{"type":"task_complete","turn_id":"turn-{index}"}}}}"#
+            ));
+        }
+        std::fs::write(&path, lines.join("\n")).unwrap();
+
+        let session = parse_session(&path).unwrap();
+        assert_eq!(session.turns.len(), DEFAULT_SESSION_PAGE_TURNS);
+        let source_size_bytes = std::fs::metadata(&path).unwrap().len();
+
+        let whole = page_session(
+            &session,
+            SessionPageDirection::Backward,
+            None,
+            None,
+            source_size_bytes,
+        )
+        .unwrap();
+        assert_eq!(whole.turns.len(), DEFAULT_SESSION_PAGE_TURNS);
+        // No pagination block at all: there is nothing left to fetch.
+        assert!(whole.pagination.is_none());
+
+        // One turn more and it pages, even though the file is still tiny.
+        lines.push(
+            r#"{"timestamp":"2026-08-18T11:59:00Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-extra"}}"#.to_string(),
+        );
+        std::fs::write(&path, lines.join("\n")).unwrap();
+        let grown = parse_session(&path).unwrap();
+        let paged = page_session(
+            &grown,
+            SessionPageDirection::Backward,
+            None,
+            None,
+            std::fs::metadata(&path).unwrap().len(),
+        )
+        .unwrap();
+        assert_eq!(paged.turns.len(), DEFAULT_SESSION_PAGE_TURNS);
+        assert!(paged.pagination.as_ref().unwrap().has_more);
     }
 
     #[test]
