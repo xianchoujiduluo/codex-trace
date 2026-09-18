@@ -17,6 +17,7 @@ import { ResizeHandle } from "./components/ResizeHandle";
 import { SidebarToggle } from "./components/SidebarToggle";
 import { SettingsModal } from "./components/SettingsModal";
 import { SessionGroupToggle } from "./components/SessionGroupToggle";
+import { parseSessionPath, resolveSessionLink, syncSessionPath } from "./lib/sessionLink";
 import { SidebarDirectoryActions } from "./components/SidebarDirectoryActions";
 import { SidebarBatchCopyButton } from "./components/SidebarBatchCopyButton";
 import {
@@ -25,7 +26,12 @@ import {
   type SessionGroupMode,
   type SessionSortOrder,
 } from "./lib/sessionGrouping";
-import { isPrimarySession, providerLabel, type ProviderFilter } from "./lib/sessionFilter";
+import {
+  isPrimarySession,
+  providerLabel,
+  sessionProvider,
+  type ProviderFilter,
+} from "./lib/sessionFilter";
 import { copyText } from "./lib/copyText";
 import { matchesTurn } from "./lib/turnSearch";
 
@@ -122,9 +128,44 @@ export function App() {
       setReplyNavTurnId(null);
       setPickerSearchQuery("");
       clearTools();
+      // The address bar names the session, so the page can be linked, reloaded
+      // and shared. `replaceState` keeps it out of history — see `sessionLink`.
+      syncSessionPath({ provider: sessionProvider(info), sessionId: info.id });
     },
     [clearTools, loadSession, setPickerSearchQuery],
   );
+
+  // Open the session named by the URL once sessions have been discovered. Runs
+  // on first load, and again if the list arrives after the path was parsed.
+  const deepLinkRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkRef.current) return;
+    const link = parseSessionPath(window.location.pathname);
+    if (!link) {
+      deepLinkRef.current = true;
+      return;
+    }
+    const match = resolveSessionLink(
+      picker.allSessions.length > 0 ? picker.allSessions : picker.sessions,
+      link,
+    );
+    if (!match) {
+      // A link to a session this machine does not have (deleted, or from another
+      // machine) can never resolve, so stop waiting. The picker stays up and the
+      // path is left alone rather than rewritten to `/`, so the URL still shows
+      // what was asked for.
+      if (picker.allSessions.length > 0 || picker.sessions.length > 0) {
+        deepLinkRef.current = true;
+        setCopyNotice({
+          message: `Session ${link.sessionId} not found on this machine.`,
+          error: true,
+        });
+      }
+      return;
+    }
+    deepLinkRef.current = true;
+    handleSelectSession(match);
+  }, [picker.allSessions, picker.sessions, handleSelectSession]);
 
   // Settle the selection onto the newest turn once the opened session's turns
   // are known. Guarded on `-1` so it never fights a selection the reader made
@@ -143,6 +184,18 @@ export function App() {
       setSearchOpen(false);
       setListSearchQuery("");
       setDetailSearchQuery("");
+      setReplyNavTurnId(turn && isReplyTurn(turn) ? turn.turn_id : null);
+    },
+    [session.session?.turns],
+  );
+
+  // Selecting a turn inside the transcript only moves the highlight. It used to
+  // open the detail page, which made every click — on the text, on the reply
+  // header, anywhere — navigate away from what the reader was reading.
+  const handleSelectTurnInList = useCallback(
+    (index: number) => {
+      setSelectedTurn(index);
+      const turn = session.session?.turns[index];
       setReplyNavTurnId(turn && isReplyTurn(turn) ? turn.turn_id : null);
     },
     [session.session?.turns],
@@ -315,7 +368,33 @@ export function App() {
     setSidebarCollapsed((collapsed) => !collapsed);
   }, []);
 
-  const goToSessions = useCallback(() => setView("picker"), []);
+  // Browser Back/Forward re-reads the path rather than being ignored, so a
+  // history entry pointing at another session opens it.
+  useEffect(() => {
+    const onPopState = () => {
+      const link = parseSessionPath(window.location.pathname);
+      if (!link) {
+        setView("picker");
+        return;
+      }
+      const match = resolveSessionLink(
+        picker.allSessions.length > 0 ? picker.allSessions : picker.sessions,
+        link,
+      );
+      if (match) handleSelectSession(match);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [picker.allSessions, picker.sessions, handleSelectSession]);
+
+  // Leaving the transcript clears the session from the address bar, so it never
+  // claims a session the reader has left. Done in the handler rather than an
+  // effect on `view`: on first paint `view` is already "picker", and an effect
+  // would rewrite the URL before the deep link above had a chance to read it.
+  const goToSessions = useCallback(() => {
+    syncSessionPath(null);
+    setView("picker");
+  }, []);
 
   const closeWorkerPanel = useCallback(() => setWorkerPanelCallId(null), []);
 
@@ -366,7 +445,7 @@ export function App() {
         return;
       }
       if (view === "detail") setView("list");
-      else if (view === "list") setView("picker");
+      else if (view === "list") goToSessions();
     },
     "/": handleOpenSearch,
     q: () => {
@@ -375,7 +454,7 @@ export function App() {
         return;
       }
       if (view === "detail") setView("list");
-      else if (view === "list") setView("picker");
+      else if (view === "list") goToSessions();
     },
     ",": () => setShowSettings(true),
     "?": () => setShowKeybinds((p) => !p),
@@ -522,7 +601,8 @@ export function App() {
               loadingMore={session.loadingMore}
               onLoadMore={handleLoadMore}
               searchQuery={listSearchQuery}
-              onSelectTurn={handleOpenDetail}
+              onSelectTurn={handleSelectTurnInList}
+              onOpenDetail={handleOpenDetail}
               providerName={
                 session.session ? providerLabel(session.session.provider ?? "codex") : "Codex"
               }

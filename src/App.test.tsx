@@ -270,4 +270,63 @@ describe("App turn navigation and search", () => {
 
     scrollSpy.mockRestore();
   });
+
+  it("opens the session named in the address bar", async () => {
+    // herdr links straight to a conversation as `/<provider>/<session-id>`; the
+    // app must open that session on load instead of showing the picker.
+    window.history.replaceState(null, "", "/codex/01900000-0000-7000-8000-000000000001");
+    render(<App />);
+
+    await waitFor(() =>
+      expect(mocks.loadSession).toHaveBeenCalledWith("/sessions/2026/08/20/rollout-session.jsonl"),
+    );
+    expect(await screen.findByText("First reply")).toBeInTheDocument();
+  });
+
+  it("names the open session in the address bar", async () => {
+    window.history.replaceState(null, "", "/");
+    render(<App />);
+    fireEvent.click(screen.getAllByText("Batch copy session")[0].closest('[role="button"]')!);
+    await screen.findByText("First reply");
+
+    // The link is only useful if opening a session updates the URL.
+    expect(window.location.pathname).toBe("/codex/01900000-0000-7000-8000-000000000001");
+  });
+
+  it("reports a link to a session this machine does not have", async () => {
+    // A stale or foreign link must not leave the app stuck on a blank screen.
+    window.history.replaceState(null, "", "/pi/does-not-exist-here");
+    render(<App />);
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/not found on this machine/i),
+    );
+    expect(mocks.loadSession).not.toHaveBeenCalled();
+  });
+
+  it("clears the session from the address bar when going back to the picker", async () => {
+    window.history.replaceState(null, "", "/");
+    render(<App />);
+    fireEvent.click(screen.getAllByText("Batch copy session")[0].closest('[role="button"]')!);
+    await screen.findByText("First reply");
+    expect(window.location.pathname).not.toBe("/");
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(window.location.pathname).toBe("/"));
+  });
+
+  it("stays in the transcript when a reply is clicked", async () => {
+    // Only the Detail button leaves the transcript. Clicking the reply body used
+    // to navigate, so there was no way to select or read it in place.
+    window.history.replaceState(null, "", "/");
+    const { container } = render(<App />);
+    fireEvent.click(screen.getAllByText("Batch copy session")[0].closest('[role="button"]')!);
+    await screen.findByText("First reply");
+
+    fireEvent.click(container.querySelector(".message--claude")!);
+
+    // Still the list view: the transcript is up and the detail page is not.
+    expect(container.querySelector(".message-list")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Back/ })).not.toBeInTheDocument();
+  });
 });

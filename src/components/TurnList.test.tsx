@@ -146,11 +146,11 @@ describe("TurnList", () => {
     expect(screen.getByText("Hi there!")).toBeInTheDocument();
   });
 
-  it("previews the closing message, not the first prose of a chat-provider turn", () => {
-    // pi and Claude Code set no `phase` and stream prose between tool calls; the
-    // turn the transcript was previewing opened with "看懂了目标界面…" while the
-    // actual answer sat 4000 characters further down. `final_answer` holds the
-    // closing block for those providers.
+  it("shows every prose block of a reply, not just the closing one", () => {
+    // Chat providers stream prose between tool calls. The transcript used to
+    // render only the last block, so a turn whose answer was preceded by a dozen
+    // findings looked like it had dropped the reply while the detail view had it
+    // all. Every block is rendered now, in stream order.
     const { container } = render(
       <TurnList
         turns={[
@@ -179,12 +179,58 @@ describe("TurnList", () => {
     );
 
     const preview = container.querySelector(".message--claude .message__content")!;
+    expect(preview).toHaveTextContent("Looking at the interface now.");
+    expect(preview).toHaveTextContent("Let me read the parser.");
     expect(preview).toHaveTextContent("Here is the plan you asked for.");
-    expect(preview).not.toHaveTextContent("Looking at the interface now.");
   });
 
-  it("prefers an explicit final_answer phase over the closing prose", () => {
-    // Codex marks the conclusion itself; a late commentary block must not win.
+  it("keeps a short reply unfolded", () => {
+    const { container } = render(
+      <TurnList turns={[makeTurn()]} selectedIndex={-1} onSelectTurn={vi.fn()} />,
+    );
+
+    const content = container.querySelector(".message--claude .message__content")!;
+    expect(content).not.toHaveClass("message__content--folded");
+    expect(container.querySelector(".message__fold-btn")).not.toBeInTheDocument();
+  });
+
+  it("folds a long reply and unfolds it in place", () => {
+    // 32 blocks / 2.7k characters was the reported turn; printing that inline
+    // buries every turn after it.
+    const blocks = Array.from({ length: 6 }, (_, n) => ({
+      text: `Step ${n}: ${"detail ".repeat(40)}`,
+      phase: null,
+      timestamp: "",
+      is_reasoning: false,
+    }));
+    const { container } = render(
+      <TurnList
+        turns={[makeTurn({ agent_messages: blocks, final_answer: blocks.at(-1)!.text })]}
+        selectedIndex={-1}
+        onSelectTurn={vi.fn()}
+      />,
+    );
+
+    const content = container.querySelector(".message--claude .message__content")!;
+    expect(content).toHaveClass("message__content--folded");
+
+    const foldBtn = container.querySelector(".message__fold-btn")!;
+    expect(foldBtn).toHaveTextContent("Show full reply (6 parts)");
+
+    // The fold must not navigate away from the transcript.
+    const onSelectTurn = vi.fn();
+    fireEvent.click(foldBtn);
+    expect(onSelectTurn).not.toHaveBeenCalled();
+
+    const unfolded = container.querySelector(".message--claude .message__content")!;
+    expect(unfolded).not.toHaveClass("message__content--folded");
+    expect(container.querySelector(".message__fold-btn")).toHaveTextContent("Show less");
+  });
+
+  it("renders prose in stream order regardless of a provider's phase labels", () => {
+    // Codex labels blocks `commentary` / `final_answer`. Order comes from the
+    // stream, not the label: a reply reads as findings -> answer, and a late
+    // commentary block belongs after the marked one, not instead of it.
     const { container } = render(
       <TurnList
         turns={[
@@ -211,8 +257,16 @@ describe("TurnList", () => {
       />,
     );
 
-    expect(container.querySelector(".message--claude .message__content")).toHaveTextContent(
-      "The marked answer.",
+    const content = container.querySelector(".message--claude .message__content")!;
+    const text = content.textContent ?? "";
+    expect(text).toContain("The marked answer.");
+    expect(text).toContain("A trailing commentary block.");
+    expect(text.indexOf("The marked answer.")).toBeLessThan(
+      text.indexOf("A trailing commentary block."),
+    );
+    // Reasoning is thinking, not prose: it stays out of the reply.
+    expect(container.querySelector(".message--claude .message__content")).not.toHaveTextContent(
+      "internal reasoning",
     );
   });
 
@@ -227,10 +281,60 @@ describe("TurnList", () => {
     expect(userMessage).not.toHaveClass("message__content--collapsed");
     expect(codexMessage).not.toHaveClass("message__content--collapsed");
 
-    // Clicking a message no longer folds it — it opens the turn detail.
+    // Clicking a message only selects the turn; it must not open the detail page.
     fireEvent.click(container.querySelector(".message--user")!);
     expect(onSelectTurn).toHaveBeenCalledWith(0);
     expect(userMessage).not.toHaveClass("message__content--collapsed");
+  });
+
+  it("selects a turn on click without opening its detail page", () => {
+    // The transcript is for reading. Every click inside a reply used to jump to
+    // the detail page, so a reader could not select or copy anything in place.
+    const onSelectTurn = vi.fn();
+    const onOpenDetail = vi.fn();
+    const { container } = render(
+      <TurnList
+        turns={[makeTurn()]}
+        selectedIndex={-1}
+        onSelectTurn={onSelectTurn}
+        onOpenDetail={onOpenDetail}
+      />,
+    );
+
+    // The user bubble and the whole reply body are both selection targets.
+    fireEvent.click(container.querySelector(".message--user")!);
+    fireEvent.click(container.querySelector(".message--claude")!);
+    expect(onSelectTurn).toHaveBeenCalledTimes(2);
+    expect(onOpenDetail).not.toHaveBeenCalled();
+  });
+
+  it("opens the detail page only from the Detail button", () => {
+    const onSelectTurn = vi.fn();
+    const onOpenDetail = vi.fn();
+    render(
+      <TurnList
+        turns={[makeTurn()]}
+        selectedIndex={-1}
+        onSelectTurn={onSelectTurn}
+        onOpenDetail={onOpenDetail}
+      />,
+    );
+
+    fireEvent.click(document.querySelector(".message__detail-btn")!);
+    expect(onOpenDetail).toHaveBeenCalledWith(0);
+    // The button must not also fire the selection handler, or the highlight and
+    // the opened turn could disagree.
+    expect(onSelectTurn).not.toHaveBeenCalled();
+  });
+
+  it("keeps opening the detail page for callers with only one handler", () => {
+    // `onOpenDetail` is optional; a caller that passes only `onSelectTurn` keeps
+    // the old wiring.
+    const onSelectTurn = vi.fn();
+    render(<TurnList turns={[makeTurn()]} selectedIndex={-1} onSelectTurn={onSelectTurn} />);
+
+    fireEvent.click(document.querySelector(".message__detail-btn")!);
+    expect(onSelectTurn).toHaveBeenCalledWith(0);
   });
 
   it("renders message prose as markdown rather than raw text", () => {

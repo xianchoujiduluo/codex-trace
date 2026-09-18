@@ -7,7 +7,7 @@ import {
   useRef,
   type CSSProperties,
 } from "react";
-import type { CodexTurn, SessionPagination } from "../../shared/types";
+import type { AgentMessage, CodexTurn, SessionPagination } from "../../shared/types";
 import { displayedTokenTotal, formatDuration, formatTokens } from "../../shared/format";
 import { formatExactTime } from "../lib/format";
 import { useAutoScroll } from "../hooks/useAutoScroll";
@@ -30,10 +30,35 @@ import { minimapLayout } from "../lib/minimap";
  */
 const LOAD_OLDER_THRESHOLD_PX = 150;
 
+/**
+ * When a reply is long enough to start folded in the transcript.
+ *
+ * Most replies are one or two short blocks and read fine inline. The reported
+ * turn had 32 blocks / 2.7k characters: printing that in full buries every turn
+ * after it. Folding keeps the list scannable while `message__fold-btn` reveals
+ * the whole reply in place.
+ */
+const REPLY_FOLD_MIN_BLOCKS = 4;
+const REPLY_FOLD_MIN_CHARS = 1200;
+
 interface TurnListProps {
   turns: CodexTurn[];
   selectedIndex: number;
+  /**
+   * Move the selection to a turn, staying in the transcript.
+   *
+   * Clicking a reply is how the reader points at it; it must not navigate. Only
+   * the Detail button leaves the transcript.
+   */
   onSelectTurn: (index: number) => void;
+  /**
+   * Open the turn's detail page.
+   *
+   * Separate from `onSelectTurn` so the whole reply is not a navigation target:
+   * the transcript is for reading, and every click inside it used to jump away.
+   * Falls back to `onSelectTurn` for callers that only have one behaviour.
+   */
+  onOpenDetail?: (index: number) => void;
   pagination?: SessionPagination | null;
   loadingMore?: boolean;
   onLoadMore?: () => void;
@@ -61,30 +86,27 @@ function executionSeconds(ms: number): string {
 }
 
 /**
- * The reply text the transcript shows under the header.
+ * The prose blocks a reply is made of, in stream order.
  *
- * A turn streams as many prose blocks between its tool calls, and a chat
- * transcript wants the conclusion, not the play-by-play — pi and Claude Code
- * turns routinely open with a sentence like "看懂了目标界面，现在让我研究代码"
- * and put the actual answer thousands of characters later. So: an explicit
- * `phase: "final_answer"` wins where the provider sets one (Codex), and
- * `turn.final_answer` covers the providers that do not — it holds the last
- * prose block of the turn, which is the closing message in every transcript
- * shape seen so far. The first non-reasoning block stays as the last resort for
- * a turn whose only prose is incomplete.
+ * A chat-provider turn streams many prose blocks between its tool calls — the
+ * reported turn had 32 of them — where the transcript used to show only the
+ * closing one. That closing block is the answer, but the blocks before it carry
+ * the findings it rests on, so showing one line and hiding the rest made the
+ * transcript look like it had dropped the reply while the detail view (which
+ * walks every message) had it all.
+ *
+ * Returns the messages rather than their text so the renderer has a stable key
+ * (`order`, falling back to the timestamp) instead of an array index.
  */
-function agentPreviewText(turn: CodexTurn): string | null {
-  if (turn.error) return turn.error;
-  const phased = turn.agent_messages.find((m) => m.phase === "final_answer");
-  if (phased) return phased.text;
-  if (turn.final_answer) return turn.final_answer;
-  return turn.agent_messages.find((m) => !m.is_reasoning)?.text ?? null;
+function replyBlocks(turn: CodexTurn): AgentMessage[] {
+  return turn.agent_messages.filter((m) => !m.is_reasoning && m.text.trim().length > 0);
 }
 
 export function TurnList({
   turns,
   selectedIndex,
   onSelectTurn,
+  onOpenDetail,
   pagination,
   loadingMore = false,
   onLoadMore,
@@ -108,6 +130,18 @@ export function TurnList({
   // and each assistant message carries its own toggle for them.
   const [openActivity, setOpenActivity] = useState<Set<number>>(new Set());
   const previouslyOpenActivity = useRef<Set<number>>(new Set());
+  // Replies long enough to push the next turn off screen start folded; the
+  // header keeps the first lines and the toggle reveals the rest.
+  const [expandedReplies, setExpandedReplies] = useState<Set<number>>(new Set());
+
+  const toggleReply = useCallback((i: number) => {
+    setExpandedReplies((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+  }, []);
 
   const toggleActivity = useCallback((i: number) => {
     setOpenActivity((prev) => {
@@ -255,7 +289,25 @@ export function TurnList({
         {visibleTurns.map(({ turn, index: i }) => {
           const isSelected = i === selectedIndex;
           const userMsg = turn.user_message ?? "";
-          const agentPreview = agentPreviewText(turn);
+          // Every prose block of the reply, in stream order. A long reply is
+          // folded so it cannot push the next turn off screen, but the reader can
+          // open it without leaving the transcript.
+          // The error is the whole reply when a turn failed: there is no prose
+          // to show alongside it.
+          const replyTexts = turn.error
+            ? [
+                {
+                  text: turn.error,
+                  phase: null,
+                  timestamp: "",
+                  is_reasoning: false,
+                } as AgentMessage,
+              ]
+            : replyBlocks(turn);
+          const replyChars = replyTexts.reduce((total, m) => total + m.text.length, 0);
+          const replyNeedsFold =
+            replyTexts.length > REPLY_FOLD_MIN_BLOCKS || replyChars > REPLY_FOLD_MIN_CHARS;
+          const replyFolded = replyNeedsFold && !expandedReplies.has(i);
           const hasDetail = Boolean(
             turn.error || turn.agent_messages.length > 0 || turn.tool_calls.length > 0,
           );
@@ -304,7 +356,9 @@ export function TurnList({
                 )}
               </div>
 
-              {/* Agent message — left, full-width plain content */}
+              {/* Agent message — left, full-width plain content.
+                 Clicking selects the turn; it deliberately does not open the
+                 detail page — only the Detail button does. */}
               <div
                 className={`message message--claude${isSelected ? " message--selected" : ""}`}
                 onClick={() => onSelectTurn(i)}
@@ -356,7 +410,7 @@ export function TurnList({
                       className="message__detail-btn"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onSelectTurn(i);
+                        (onOpenDetail ?? onSelectTurn)(i);
                       }}
                     >
                       Detail <ForwardIcon />
@@ -364,13 +418,34 @@ export function TurnList({
                   )}
                 </div>
 
-                {agentPreview && (
+                {replyTexts.length > 0 && (
                   <div
-                    className={`message__content${turn.error ? " message__content--error" : ""}`}
+                    className={`message__content${turn.error ? " message__content--error" : ""}${
+                      replyFolded ? " message__content--folded" : ""
+                    }`}
                   >
                     <div className="markdown-body">
-                      <MarkdownRenderer content={agentPreview} breaks />
+                      {replyTexts.map((message) => (
+                        <MarkdownRenderer
+                          key={`${turn.turn_id}-${message.order ?? message.timestamp}`}
+                          content={message.text}
+                          breaks
+                        />
+                      ))}
                     </div>
+                    {replyNeedsFold && (
+                      <button
+                        type="button"
+                        className="message__fold-btn"
+                        aria-expanded={!replyFolded}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleReply(i);
+                        }}
+                      >
+                        {replyFolded ? `Show full reply (${replyTexts.length} parts)` : "Show less"}
+                      </button>
+                    )}
                   </div>
                 )}
 
