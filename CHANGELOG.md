@@ -4,6 +4,29 @@ All notable changes to codex-trace are documented here. Versions follow
 [semantic versioning](https://semver.org/), and this file follows
 [Keep a Changelog](https://keepachangelog.com/) conventions.
 
+## [0.4.22] — 2026-09-18
+
+### Added
+
+- **Sessions have addresses**. Opening a conversation puts it in the address bar as
+  `/<agent>/<session-id>` — `/pi/01a0af51-…`, `/codex/…`, `/claude/…` — and loading such a URL
+  opens that conversation. Links can be bookmarked, shared, and followed from another tool,
+  which is what makes a quick jump from herdr possible. Leaving the transcript returns the
+  address to the session list. A link to a session this machine does not have says so and
+  stays on the list rather than opening something else.
+- **A reply shows all of its prose**. Replies arrive as many paragraphs interleaved with tool
+  calls, and the transcript used to show only the last one, so a reply looked cut short next to
+  its detail page. Every paragraph is shown in order now; a long one folds with a
+  "Show full reply (N parts)" control that opens it in place.
+
+### Changed
+
+- **Clicking a reply selects it instead of opening its detail page**. Only the **Detail** button
+  navigates now, so text can be read and copied from the transcript without the view changing
+  under it.
+
+[0.4.22]: https://github.com/xianchoujiduluo/codex-trace/releases/tag/v0.4.22
+
 ## [0.4.21] — 2026-09-18
 
 ### Fixed
