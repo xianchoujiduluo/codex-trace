@@ -15,7 +15,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 use tower_http::compression::CompressionLayer;
 use tower_http::cors::CorsLayer;
-use tower_http::services::ServeDir;
+use tower_http::services::{ServeDir, ServeFile};
 
 use crate::state::AppState;
 use crate::watcher::{start_picker_watcher, start_session_watcher};
@@ -75,6 +75,23 @@ pub fn resolve_bind_addr() -> (String, u16) {
     )
 }
 
+/// The service that serves the built frontend.
+///
+/// Anything that is not a real file falls back to `index.html` **with a 200**,
+/// so deep links like `/pi/<session-id>` load the app instead of 404ing. The app
+/// reads the path to decide which session to open.
+///
+/// `fallback` rather than `not_found_service`: a deep link is a normal
+/// navigation, not a miss. `not_found_service` would attach a 404 status to the
+/// shell page, and clients act on that status — herdr's jump would land on what
+/// the browser treats as an error page.
+fn static_service(dir: &str) -> ServeDir<ServeFile> {
+    let index = std::path::Path::new(dir).join("index.html");
+    ServeDir::new(dir)
+        .append_index_html_on_directories(true)
+        .fallback(ServeFile::new(index))
+}
+
 pub fn resolve_static_dir() -> Option<String> {
     std::env::var("CODEXTRACE_STATIC_DIR")
         .ok()
@@ -122,8 +139,7 @@ async fn run_server(state: Arc<HttpState>) {
         .layer(CorsLayer::permissive());
 
     if let Some(dir) = resolve_static_dir() {
-        let serve = ServeDir::new(&dir).append_index_html_on_directories(true);
-        router = router.fallback_service(serve);
+        router = router.fallback_service(static_service(&dir));
         eprintln!("HTTP API: serving static assets from {dir}");
     }
 
@@ -771,6 +787,73 @@ mod tests {
         assert_eq!(
             tokio::fs::read_to_string(target).await.unwrap(),
             "old frontend"
+        );
+    }
+
+    /// Drive the static service with a real request so the fallback's status
+    /// code and body are observed, not just its construction.
+    async fn get(service: &ServeDir<ServeFile>, uri: &str) -> (u16, String) {
+        use http_body_util::BodyExt;
+        use tower::ServiceExt;
+        let response = service
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri(uri)
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = response.status().as_u16();
+        // `ServeDir` has its own body type, so collect it via http-body-util
+        // rather than `axum::body::to_bytes`.
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        (status, String::from_utf8_lossy(&bytes).into_owned())
+    }
+
+    #[tokio::test]
+    async fn deep_link_serves_the_frontend_with_ok() {
+        // `/pi/<session-id>` has no file behind it; it must return the app shell
+        // with 200 so the client renders the app rather than an error page.
+        let dir = tempfile::tempdir().unwrap();
+        tokio::fs::write(
+            dir.path().join("index.html"),
+            b"<!doctype html><html>shell</html>",
+        )
+        .await
+        .unwrap();
+
+        let service = static_service(dir.path().to_str().unwrap());
+        let (status, body) = get(&service, "/pi/01a0af51-7656-70cb-8f13-c71f033d3fbb").await;
+        assert_eq!(status, 200, "a deep link must not 404");
+        assert!(body.contains("shell"));
+
+        // A nested path is a deep link too (the app resolves the last segments).
+        let (nested_status, nested_body) =
+            get(&service, "/codex/rollout-2026-09-17T14-13-04").await;
+        assert_eq!(nested_status, 200);
+        assert!(nested_body.contains("shell"));
+    }
+
+    #[tokio::test]
+    async fn real_files_still_win_over_the_fallback() {
+        // The fallback must not shadow assets, or the app would boot with an HTML
+        // file where its JavaScript belongs.
+        let dir = tempfile::tempdir().unwrap();
+        tokio::fs::write(dir.path().join("index.html"), b"<!doctype html>shell")
+            .await
+            .unwrap();
+        tokio::fs::write(dir.path().join("app.js"), b"console.log('real')")
+            .await
+            .unwrap();
+
+        let service = static_service(dir.path().to_str().unwrap());
+        let (status, body) = get(&service, "/app.js").await;
+        assert_eq!(status, 200);
+        assert!(
+            body.contains("console.log('real')"),
+            "an existing asset must be served, not the shell"
         );
     }
 }
