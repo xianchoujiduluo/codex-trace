@@ -19,7 +19,14 @@ import {
 } from "../lib/sessionGrouping";
 import { OngoingDots } from "./OngoingDots";
 import { SubagentMarker } from "./SubagentMarker";
-import { VscCheck, VscCopy, VscDownload, VscFile, VscLoading } from "react-icons/vsc";
+import {
+  VscCheck,
+  VscCopy,
+  VscDownload,
+  VscFile,
+  VscFolderOpened,
+  VscLoading,
+} from "react-icons/vsc";
 
 const EMPTY_SESSION_IDS: ReadonlySet<string> = new Set();
 
@@ -73,21 +80,28 @@ export function SidebarTree({
     [onToggleDate],
   );
 
-  const handleCopy = useCallback(async (session: CodexSessionInfo, target: "id" | "path") => {
-    const copyKey = `${session.path}:${target}`;
-    const value =
-      target === "id" ? session.id : sessionRelativePath(session.path, session.date_group);
-    try {
-      await copyText(value);
-      setCopiedTarget(copyKey);
-      window.setTimeout(
-        () => setCopiedTarget((current) => (current === copyKey ? null : current)),
-        1500,
-      );
-    } catch {
-      setCopiedTarget(null);
-    }
-  }, []);
+  const handleCopy = useCallback(
+    async (session: CodexSessionInfo, target: "id" | "path" | "fullPath") => {
+      const copyKey = `${session.path}:${target}`;
+      const value =
+        target === "id"
+          ? session.id
+          : target === "fullPath"
+            ? session.path
+            : sessionRelativePath(session.path, session.date_group);
+      try {
+        await copyText(value);
+        setCopiedTarget(copyKey);
+        window.setTimeout(
+          () => setCopiedTarget((current) => (current === copyKey ? null : current)),
+          1500,
+        );
+      } catch {
+        setCopiedTarget(null);
+      }
+    },
+    [],
+  );
 
   const handleDownload = useCallback(
     async (session: CodexSessionInfo) => {
@@ -258,6 +272,31 @@ export function SidebarTree({
                             onKeyDown={(e) => e.stopPropagation()}
                           >
                             {copiedTarget === `${s.path}:path` ? <VscCheck /> : <VscFile />}
+                          </button>
+                          <button
+                            type="button"
+                            className={`sidebar-tree__copy-button${copiedTarget === `${s.path}:fullPath` ? " sidebar-tree__copy-button--copied" : ""}`}
+                            aria-label={
+                              copiedTarget === `${s.path}:fullPath`
+                                ? "Copied full session path"
+                                : "Copy full session path"
+                            }
+                            title={
+                              copiedTarget === `${s.path}:fullPath`
+                                ? "Copied full session path"
+                                : "Copy full session path"
+                            }
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleCopy(s, "fullPath");
+                            }}
+                            onKeyDown={(e) => e.stopPropagation()}
+                          >
+                            {copiedTarget === `${s.path}:fullPath` ? (
+                              <VscCheck />
+                            ) : (
+                              <VscFolderOpened />
+                            )}
                           </button>
                           <button
                             type="button"
