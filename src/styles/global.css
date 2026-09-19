@@ -470,6 +470,22 @@ body {
   font-size: 12px;
   font-weight: 600;
 }
+/* The session's working directory.
+   It fills the space between the metadata and the trailing timestamp, which is
+   otherwise empty on a wide window (measured: 1150px of dead space at 1920px).
+   `flex: 1` claims that room and `min-width: 0` lets the path ellipsize instead
+   of pushing the timestamp off the bar. */
+.info-bar__cwd {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
 .info-bar__time {
   color: var(--text-secondary);
   font-size: 12px;

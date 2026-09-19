@@ -9,6 +9,9 @@ interface InfoBarProps {
 
 export function InfoBar({ session }: InfoBarProps) {
   const cwd = session.cwd ? shortPath(session.cwd) : null;
+  // The full path, not just its last segment: the transcript is read out of
+  // context, and two projects can share a basename (`…/work/api` vs `…/other/api`).
+  const fullCwd = session.cwd?.trim() || null;
   const branch = session.git?.branch ?? null;
   const totalTok = session.total_tokens
     ? displayedTokenTotal(
@@ -34,6 +37,11 @@ export function InfoBar({ session }: InfoBarProps) {
         </span>
       )}
       {totalTok > 0 && <span className="info-bar__tokens">{formatTokens(totalTok)} tok</span>}
+      {fullCwd && (
+        <span className="info-bar__cwd" title={fullCwd}>
+          {fullCwd}
+        </span>
+      )}
       <span className="info-bar__time">{timeAgo(session.timestamp)}</span>
       {session.is_ongoing && (
         <span className="info-bar__ongoing">

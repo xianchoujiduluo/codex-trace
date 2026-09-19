@@ -46,6 +46,23 @@ describe("InfoBar", () => {
     expect(screen.getByText("myproject")).toBeInTheDocument();
   });
 
+  it("renders the full working directory", () => {
+    // The basename alone is ambiguous — two projects can share one (`…/work/api`
+    // vs `…/other/api`) — and the transcript is read without the session list in
+    // view, which is where the path was visible before.
+    const { container } = render(<InfoBar session={makeSession()} />);
+    const cwd = container.querySelector(".info-bar__cwd");
+    expect(cwd).toBeInTheDocument();
+    expect(cwd).toHaveTextContent("/Users/user/myproject");
+    // The full path is the tooltip when the bar is too narrow for it.
+    expect(cwd).toHaveAttribute("title", "/Users/user/myproject");
+  });
+
+  it("omits the working directory when the session has none", () => {
+    const { container } = render(<InfoBar session={makeSession({ cwd: null })} />);
+    expect(container.querySelector(".info-bar__cwd")).not.toBeInTheDocument();
+  });
+
   it("renders originator with 'via' prefix", () => {
     render(<InfoBar session={makeSession()} />);
     expect(screen.getByText("via codex-tui")).toBeInTheDocument();
