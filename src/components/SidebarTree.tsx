@@ -11,7 +11,7 @@ import {
   sessionProvider,
   type ProviderFilter,
 } from "../lib/sessionFilter";
-import { sessionRelativePath } from "../lib/sessionPath";
+import { sessionRelativePath, sessionTildePath } from "../lib/sessionPath";
 import {
   groupSessions,
   type SessionGroupMode,
@@ -87,7 +87,7 @@ export function SidebarTree({
         target === "id"
           ? session.id
           : target === "fullPath"
-            ? session.path
+            ? sessionTildePath(session.path)
             : sessionRelativePath(session.path, session.date_group);
       try {
         await copyText(value);

@@ -198,8 +198,11 @@ describe("SidebarTree", () => {
 
   it("copies the full session path from its own button", async () => {
     // Two separate buttons on purpose: the relative path is short and readable
-    // inside the sessions tree, while the absolute path is what other tools need
+    // inside the sessions tree, while the full path is what other tools need
     // to open the file. Replacing one with the other breaks a use case either way.
+    // The copied value is anchored at `~/` rather than the backend's absolute
+    // path, because in Docker that absolute path only exists inside the
+    // container (`/home/app/...`) and is useless on the user's machine.
     const onSelect = vi.fn();
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
@@ -222,12 +225,41 @@ describe("SidebarTree", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy full session path" }));
 
     await waitFor(() =>
-      expect(writeText).toHaveBeenCalledWith(
-        "/home/user/.codex/sessions/2026/04/26/rollout-abc.jsonl",
-      ),
+      expect(writeText).toHaveBeenCalledWith("~/.codex/sessions/2026/04/26/rollout-abc.jsonl"),
     );
     expect(onSelect).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Copied full session path" })).toBeInTheDocument();
+  });
+
+  it("copies a pi session path rooted at the home directory", async () => {
+    // Regression guard for Docker: the container reports its own $HOME
+    // (/home/app), and that path does not exist on the host running the browser.
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const session = makeSession({
+      provider: "pi",
+      path: "/home/app/.pi/agent/sessions/--home-administrator--/2026-09-13T13-28-18-318Z_abc.jsonl",
+    });
+    render(
+      <SidebarTree
+        sessions={[session]}
+        selectedPath={null}
+        collapsedDates={new Set()}
+        onSelectSession={vi.fn()}
+        onToggleDate={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy full session path" }));
+
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(
+        "~/.pi/agent/sessions/--home-administrator--/2026-09-13T13-28-18-318Z_abc.jsonl",
+      ),
+    );
   });
 
   it("downloads the source session file without opening the session", async () => {
